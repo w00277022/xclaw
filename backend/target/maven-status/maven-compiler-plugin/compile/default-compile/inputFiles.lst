@@ -1,0 +1,12 @@
+/root/.openclaw/workspace/xclaw-platform/backend/src/main/java/com/xclaw/entity/XclawInstance.java
+/root/.openclaw/workspace/xclaw-platform/backend/src/main/java/com/xclaw/XclawApplication.java
+/root/.openclaw/workspace/xclaw-platform/backend/src/main/java/com/xclaw/service/ChatMessageService.java
+/root/.openclaw/workspace/xclaw-platform/backend/src/main/java/com/xclaw/mapper/XclawInstanceMapper.java
+/root/.openclaw/workspace/xclaw-platform/backend/src/main/java/com/xclaw/controller/XclawInstanceController.java
+/root/.openclaw/workspace/xclaw-platform/backend/src/main/java/com/xclaw/service/XclawInstanceService.java
+/root/.openclaw/workspace/xclaw-platform/backend/src/main/java/com/xclaw/config/WebSocketConfig.java
+/root/.openclaw/workspace/xclaw-platform/backend/src/main/java/com/xclaw/controller/ChatController.java
+/root/.openclaw/workspace/xclaw-platform/backend/src/main/java/com/xclaw/mapper/ChatMessageMapper.java
+/root/.openclaw/workspace/xclaw-platform/backend/src/main/java/com/xclaw/dto/CreateXclawRequest.java
+/root/.openclaw/workspace/xclaw-platform/backend/src/main/java/com/xclaw/entity/ChatMessage.java
+/root/.openclaw/workspace/xclaw-platform/backend/src/main/java/com/xclaw/websocket/ChatWebSocketHandler.java

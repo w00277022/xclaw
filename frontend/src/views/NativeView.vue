@@ -1,0 +1,138 @@
+<template>
+  <div style="display: flex; height: 100%">
+    <!-- Left: XClaw list -->
+    <div style="width: 280px; border-right: 1px solid #e4e7ed; display: flex; flex-direction: column; background: #fafafa">
+      <div style="padding: 15px; border-bottom: 1px solid #e4e7ed; font-weight: bold; display: flex; align-items: center; gap: 8px">
+        <span>🌐</span> 选择 XClaw 实例
+        <el-button size="small" circle @click="loadData" style="margin-left: auto">
+          <el-icon><Refresh /></el-icon>
+        </el-button>
+      </div>
+      <div style="flex: 1; overflow-y: auto">
+        <div
+          v-for="inst in instances"
+          :key="inst.id"
+          @click="selectInstance(inst)"
+          :style="{
+            padding: '12px 15px', cursor: 'pointer',
+            borderBottom: '1px solid #f0f0f0',
+            background: selected?.id === inst.id ? '#ecf5ff' : '',
+            transition: 'background 0.2s'
+          }"
+        >
+          <div style="display: flex; align-items: center; justify-content: space-between">
+            <div style="font-weight: 500; font-size: 14px">{{ inst.name }}</div>
+            <el-tag size="small" :type="statusType(inst.status)">{{ inst.status === 'RUNNING' ? '运行中' : inst.status === 'STOPPED' ? '已停止' : inst.status }}</el-tag>
+          </div>
+          <div style="font-size: 12px; color: #999; margin-top: 6px">
+            <el-icon style="vertical-align: middle"><Monitor /></el-icon>
+            <span style="margin-left: 4px">:{{ inst.port }}</span>
+          </div>
+        </div>
+        <div v-if="!instances.length" style="padding: 40px 20px; text-align: center; color: #999">
+          <div style="font-size: 32px; margin-bottom: 10px">📭</div>
+          <div>暂无 XClaw 实例</div>
+          <div style="font-size: 12px; margin-top: 5px">请先在「创建 XClaw」页面创建</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Native Web UI via iframe -->
+    <div style="flex: 1; display: flex; flex-direction: column; position: relative">
+      <template v-if="selected">
+        <!-- Info bar -->
+        <div style="padding: 10px 20px; border-bottom: 1px solid #e4e7ed; display: flex; align-items: center; gap: 12px; background: #fff">
+          <span style="font-weight: 600; font-size: 15px">{{ selected.name }}</span>
+          <el-tag size="small" :type="statusType(selected.status)">{{ selected.status === 'RUNNING' ? '运行中' : selected.status }}</el-tag>
+          <span style="color: #999; font-size: 13px; margin-left: auto">
+            <el-icon><Link /></el-icon>
+            http://localhost:{{ selected.port }}
+          </span>
+        </div>
+
+        <!-- iframe (only when RUNNING) -->
+        <div v-if="selected.status === 'RUNNING'" style="flex: 1; position: relative">
+          <iframe
+            :src="iframeUrl"
+            style="width: 100%; height: 100%; border: none"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+            @load="onIframeLoad"
+            @error="onIframeError"
+          ></iframe>
+        </div>
+
+        <!-- Not running hint -->
+        <div v-else style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #999; gap: 12px">
+          <div style="font-size: 48px">⏸️</div>
+          <div style="font-size: 16px">该实例当前未运行</div>
+          <div style="font-size: 13px; color: #bbb">请先在「XClaw 管理」页面启动实例</div>
+          <el-button type="primary" @click="goToManage" style="margin-top: 8px">前往管理</el-button>
+        </div>
+      </template>
+
+      <!-- No selection -->
+      <div v-else style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #999; gap: 12px">
+        <div style="font-size: 56px">🌐</div>
+        <div style="font-size: 17px; font-weight: 500; color: #666">XClaw Native 对话</div>
+        <div style="font-size: 14px">← 请选择一个 XClaw 实例，查看其原生 Web UI</div>
+      </div>
+
+      <!-- Loading overlay -->
+      <div v-if="iframeLoading && selected?.status === 'RUNNING'" style="position: absolute; inset: 50px 0 0 0; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.8); z-index: 10">
+        <el-icon class="is-loading" style="font-size: 32px; color: #409EFF"><Loading /></el-icon>
+        <span style="margin-left: 10px; color: #666">加载中...</span>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { xclawApi } from '../api'
+
+const router = useRouter()
+const instances = ref([])
+const selected = ref(null)
+const iframeLoading = ref(false)
+
+const iframeUrl = computed(() => {
+  if (!selected.value) return ''
+  return `http://localhost:${selected.value.port}`
+})
+
+const statusType = (s) => ({ RUNNING: 'success', STOPPED: 'info', ERROR: 'danger' }[s] || 'info')
+
+const loadData = async () => {
+  try {
+    const { data } = await xclawApi.list()
+    instances.value = data
+    // Keep selected if still exists
+    if (selected.value) {
+      const found = data.find(i => i.id === selected.value.id)
+      if (found) selected.value = found
+    }
+  } catch (e) {
+    console.error('Failed to load instances:', e)
+  }
+}
+
+const selectInstance = (inst) => {
+  selected.value = inst
+  iframeLoading.value = inst.status === 'RUNNING'
+}
+
+const onIframeLoad = () => {
+  iframeLoading.value = false
+}
+
+const onIframeError = () => {
+  iframeLoading.value = false
+}
+
+const goToManage = () => {
+  router.push('/manage')
+}
+
+onMounted(loadData)
+</script>

@@ -1,0 +1,12 @@
+com/xclaw/entity/XclawInstance.class
+com/xclaw/controller/ChatController.class
+com/xclaw/service/ChatMessageService.class
+com/xclaw/entity/ChatMessage.class
+com/xclaw/mapper/ChatMessageMapper.class
+com/xclaw/controller/XclawInstanceController.class
+com/xclaw/XclawApplication.class
+com/xclaw/config/WebSocketConfig.class
+com/xclaw/service/XclawInstanceService.class
+com/xclaw/mapper/XclawInstanceMapper.class
+com/xclaw/websocket/ChatWebSocketHandler.class
+com/xclaw/dto/CreateXclawRequest.class

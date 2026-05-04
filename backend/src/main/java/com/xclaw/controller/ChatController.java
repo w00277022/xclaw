@@ -29,7 +29,9 @@ public class ChatController {
     private final XclawInstanceService instanceService;
 
     @GetMapping("/{instanceId}/history")
-    public ResponseEntity<?> history(@PathVariable Long instanceId, HttpServletRequest request) {
+    public ResponseEntity<?> history(@PathVariable Long instanceId,
+            @RequestParam(required = false) String sessionKey,
+            HttpServletRequest request) {
         Long userId = (Long) request.getAttribute("userId");
         String role = (String) request.getAttribute("role");
 
@@ -40,6 +42,9 @@ public class ChatController {
             }
         }
 
+        if (sessionKey != null && !sessionKey.isEmpty()) {
+            return ResponseEntity.ok(chatMessageService.getByInstanceAndSession(instanceId, sessionKey));
+        }
         return ResponseEntity.ok(chatMessageService.getByInstanceId(instanceId));
     }
 

@@ -10,6 +10,7 @@ public class ChatMessage {
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long instanceId;
+    private String sessionKey; // OpenClaw session key for multi-session support
     private String role; // user / assistant
     private String content;
     private LocalDateTime createdAt;

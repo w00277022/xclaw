@@ -48,7 +48,10 @@ export const xclawApi = {
 
 // Chat API
 export const chatApi = {
-  history: (instanceId) => api.get(`/chat/${instanceId}/history`),
+  history: (instanceId, sessionKey) => {
+    const params = sessionKey ? { sessionKey } : {}
+    return api.get(`/chat/${instanceId}/history`, { params })
+  },
   deleteMessage: (messageId) => api.delete(`/chat/${messageId}`),
   upload: (file) => {
     const formData = new FormData()

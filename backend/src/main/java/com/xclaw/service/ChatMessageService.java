@@ -17,6 +17,13 @@ public class ChatMessageService extends ServiceImpl<ChatMessageMapper, ChatMessa
                 .orderByAsc(ChatMessage::getCreatedAt));
     }
 
+    public List<ChatMessage> getByInstanceAndSession(Long instanceId, String sessionKey) {
+        return list(new LambdaQueryWrapper<ChatMessage>()
+                .eq(ChatMessage::getInstanceId, instanceId)
+                .eq(ChatMessage::getSessionKey, sessionKey)
+                .orderByAsc(ChatMessage::getCreatedAt));
+    }
+
     public List<ChatMessage> getHistory(Long instanceId, int limit) {
         return list(new LambdaQueryWrapper<ChatMessage>()
                 .eq(ChatMessage::getInstanceId, instanceId)
@@ -24,9 +31,10 @@ public class ChatMessageService extends ServiceImpl<ChatMessageMapper, ChatMessa
                 .last("LIMIT " + limit));
     }
 
-    public ChatMessage saveMessage(Long instanceId, String role, String content) {
+    public ChatMessage saveMessage(Long instanceId, String sessionKey, String role, String content) {
         ChatMessage msg = new ChatMessage();
         msg.setInstanceId(instanceId);
+        msg.setSessionKey(sessionKey);
         msg.setRole(role);
         msg.setContent(content);
         save(msg);

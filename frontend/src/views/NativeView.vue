@@ -97,7 +97,7 @@
           <iframe
             :src="iframeUrl"
             style="width: 100%; height: 100%; border: none"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
             allow="clipboard-read; clipboard-write"
             @load="onIframeLoad"
             @error="onIframeError"
@@ -130,7 +130,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { xclawApi } from '../api'
 
@@ -153,8 +153,8 @@ const onStorage = (e) => {
     isCollapsed.value = e.newValue === 'true'
   }
 }
+// Storage listener (mount once, lives forever with keep-alive)
 onMounted(() => window.addEventListener('storage', onStorage))
-onUnmounted(() => window.removeEventListener('storage', onStorage))
 
 const iframeUrl = computed(() => {
   if (!selected.value) return ''
@@ -172,6 +172,14 @@ const loadData = async () => {
       const found = data.find(i => i.id === selected.value.id)
       if (found) selected.value = found
     }
+    // Remember last selected: auto-restore
+    if (!selected.value) {
+      const lastId = localStorage.getItem('xclaw_last_native_instance')
+      if (lastId) {
+        const inst = data.find(i => String(i.id) === lastId)
+        if (inst) selectInstance(inst)
+      }
+    }
   } catch (e) {
     console.error('Failed to load instances:', e)
   }
@@ -179,6 +187,7 @@ const loadData = async () => {
 
 const selectInstance = (inst) => {
   selected.value = inst
+  localStorage.setItem('xclaw_last_native_instance', String(inst.id))
   iframeLoading.value = inst.status === 'RUNNING'
 }
 
@@ -194,5 +203,6 @@ const goToManage = () => {
   router.push('/manage')
 }
 
-onMounted(loadData)
+// Initial load handled by onActivated (keep-alive)
+onActivated(loadData)
 </script>

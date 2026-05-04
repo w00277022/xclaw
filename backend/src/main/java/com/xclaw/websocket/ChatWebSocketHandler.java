@@ -17,6 +17,8 @@ import java.io.*;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.*;
 import java.util.*;
 import java.util.concurrent.*;
@@ -62,26 +64,71 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         }
 
         JsonNode payload = objectMapper.readTree(message.getPayload());
+
+        // New session request
+        if (payload.has("newSession") && payload.get("newSession").asBoolean()) {
+            String label = payload.has("label") ? payload.get("label").asText() : "新会话";
+            log.info("Creating new session for instance {}: {}", instanceId, label);
+            createNewSession(session, instance, instanceId, label);
+            return;
+        }
+
+        // Regular chat message
         String userMessage = payload.has("content") ? payload.get("content").asText() : "";
+        String sessionKey = payload.has("sessionKey") ? payload.get("sessionKey").asText() : "agent:main:main";
         if (userMessage.isEmpty()) return;
 
-        chatMessageService.saveMessage(instanceId, "user", userMessage);
-        log.info("Chat [{}] {}: {}", instanceId, instance.getName(), userMessage.substring(0, Math.min(50, userMessage.length())));
+        // Extract attachment info
+        String attachmentInfo = "";
+        if (payload.has("attachment")) {
+            JsonNode att = payload.get("attachment");
+            String fileName = att.has("fileName") ? att.get("fileName").asText() : "unknown";
+            String fileKey = att.has("fileKey") ? att.get("fileKey").asText() : "";
+            attachmentInfo = "\n[附件: " + fileName;
+            if (!fileKey.isEmpty()) {
+                try {
+                    String content = Files.readString(Path.of(System.getProperty("java.io.tmpdir"), "xclaw-uploads", fileKey));
+                    if (!content.isEmpty()) attachmentInfo += "\n文件内容:\n" + content.substring(0, Math.min(content.length(), 8000));
+                } catch (IOException ignored) {}
+            }
+            attachmentInfo += "]";
+        }
 
-        connectAndChat(session, instance, userMessage, instanceId);
+        chatMessageService.saveMessage(instanceId, sessionKey, "user", userMessage);
+        log.info("Chat [{}] session={}: {}", instanceId, sessionKey, userMessage.substring(0, Math.min(50, userMessage.length())));
+
+        String combinedMessage = userMessage + attachmentInfo;
+        connectAndChat(session, instance, combinedMessage, sessionKey, instanceId);
     }
 
-    private void connectAndChat(WebSocketSession session, XclawInstance instance, String userMessage, Long instanceId) {
+    /**
+     * Create a new session by generating a unique sessionKey.
+     * No need to spawn on OpenClaw — chat.send with a new sessionKey auto-creates the context.
+     */
+    private void createNewSession(WebSocketSession session, XclawInstance instance, Long instanceId, String label) {
+        String sessionKey = "agent:main:chat-" + UUID.randomUUID().toString().substring(0, 8);
+        log.info("New session created: {} for instance {}", sessionKey, instanceId);
+        try {
+            ObjectNode resp = objectMapper.createObjectNode();
+            resp.put("sessionCreated", true);
+            resp.put("sessionKey", sessionKey);
+            resp.put("label", label);
+            session.sendMessage(new TextMessage(objectMapper.writeValueAsString(resp)));
+        } catch (IOException e) {
+            log.error("Failed to send sessionCreated", e);
+        }
+    }
+
+    private void connectAndChat(WebSocketSession session, XclawInstance instance,
+            String userMessage, String ocSessionKey, Long instanceId) {
         CompletableFuture.runAsync(() -> {
             try {
                 int port = instance.getPort();
-                log.info("Connecting to OpenClaw gateway at ws://localhost:{}", port);
+                log.info("Connecting to OpenClaw gateway at ws://localhost:{} sessionKey={}", port, ocSessionKey);
 
-                // Generate Ed25519 key pair
                 KeyPairGenerator keyGen = KeyPairGenerator.getInstance("Ed25519");
                 KeyPair keyPair = keyGen.generateKeyPair();
 
-                // Extract raw public key (32 bytes)
                 byte[] spkiDer = keyPair.getPublic().getEncoded();
                 byte[] rawKey = Arrays.copyOfRange(spkiDer, ED25519_SPKI_PREFIX.length, spkiDer.length);
                 String deviceId = sha256hex(rawKey);
@@ -89,7 +136,9 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
                 HttpClient httpClient = HttpClient.newHttpClient();
                 httpClient.newWebSocketBuilder()
-                    .buildAsync(URI.create("ws://localhost:" + port), makeOcListener(session, keyPair, deviceId, pubKeyB64url, userMessage, instanceId))
+                    .buildAsync(URI.create("ws://localhost:" + port),
+                        makeOcListener(session, keyPair, deviceId, pubKeyB64url,
+                            userMessage, ocSessionKey, instanceId))
                     .get(10, TimeUnit.SECONDS);
 
             } catch (Exception e) {
@@ -100,7 +149,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     private WebSocket.Listener makeOcListener(WebSocketSession session, KeyPair keyPair,
-            String deviceId, String pubKeyB64url, String userMessage, Long instanceId) {
+            String deviceId, String pubKeyB64url, String userMessage,
+            String ocSessionKey, Long instanceId) {
         return new WebSocket.Listener() {
             private final StringBuilder fullResponse = new StringBuilder();
             private final StringBuilder buf = new StringBuilder();
@@ -108,9 +158,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             private boolean done = false;
 
             @Override
-            public void onOpen(java.net.http.WebSocket ws) {
-                ws.request(1);
-            }
+            public void onOpen(java.net.http.WebSocket ws) { ws.request(1); }
 
             @Override
             public CompletionStage<?> onText(java.net.http.WebSocket ws, CharSequence data, boolean last) {
@@ -123,7 +171,6 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 try {
                     JsonNode msg = objectMapper.readTree(text);
 
-                    // Connect challenge
                     if ("connect.challenge".equals(msg.path("event").asText())) {
                         String nonce = msg.get("payload").get("nonce").asText();
                         long signedAtMs = System.currentTimeMillis();
@@ -165,17 +212,16 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                         return null;
                     }
 
-                    // Connect response
                     if ("1".equals(msg.path("id").asText("")) && msg.path("ok").asBoolean(false)) {
                         connected = true;
-                        log.info("OpenClaw connect OK for instance {}", instanceId);
+                        log.info("OpenClaw connect OK for instance {} sessionKey={}", instanceId, ocSessionKey);
 
-                        // Subscribe then send chat
+                        // Subscribe to the specific session
                         ObjectNode subReq = objectMapper.createObjectNode();
                         subReq.put("type", "req");
                         subReq.put("id", "sub");
                         subReq.put("method", "sessions.subscribe");
-                        subReq.putObject("params").put("sessionKey", "agent:main:main");
+                        subReq.putObject("params").put("sessionKey", ocSessionKey);
                         ws.sendText(objectMapper.writeValueAsString(subReq), true);
 
                         ObjectNode chatReq = objectMapper.createObjectNode();
@@ -183,14 +229,13 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                         chatReq.put("id", "2");
                         chatReq.put("method", "chat.send");
                         ObjectNode cp = chatReq.putObject("params");
-                        cp.put("sessionKey", "agent:main:main");
+                        cp.put("sessionKey", ocSessionKey);
                         cp.put("message", userMessage);
                         cp.put("idempotencyKey", UUID.randomUUID().toString());
                         ws.sendText(objectMapper.writeValueAsString(chatReq), true);
                         return null;
                     }
 
-                    // Agent event → assistant deltas
                     String event = msg.path("event").asText();
                     JsonNode pl = msg.get("payload");
                     if ("agent".equals(event) && pl != null) {
@@ -209,7 +254,6 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                         return null;
                     }
 
-                    // chat event with state:final or state:done → complete
                     if ("chat".equals(event) && pl != null
                             && ("final".equals(pl.path("state").asText())
                                 || "done".equals(pl.path("state").asText()))) {
@@ -229,7 +273,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 log.info("Chat complete for instance {}, response: {}", instanceId, fullResponse.toString());
                 sendChunk(session, "", true);
                 if (fullResponse.length() > 0) {
-                    chatMessageService.saveMessage(instanceId, "assistant", fullResponse.toString());
+                    chatMessageService.saveMessage(instanceId, ocSessionKey, "assistant", fullResponse.toString());
                 }
                 ws.sendClose(WebSocket.NORMAL_CLOSURE, "");
             }

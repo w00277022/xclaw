@@ -10,8 +10,9 @@ public class XclawInstance {
     @TableId(type = IdType.AUTO)
     private Long id;
     private String name;
+    private Long userId;
     private String containerId;
-    private String status; // CREATING, RUNNING, STOPPED, ERROR, DELETING
+    private String status; // CREATING, RUNNING, STOPPED, ERROR, PENDING_APPROVAL, REJECTED
     private Integer port;
     private String configJson;
     private String description;

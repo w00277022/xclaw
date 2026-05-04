@@ -3,9 +3,11 @@ package com.xclaw.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.xclaw.dto.CreateXclawRequest;
+import com.xclaw.entity.Approval;
 import com.xclaw.entity.XclawInstance;
 import com.xclaw.mapper.XclawInstanceMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -36,24 +38,59 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
     @Value("${openclaw.instance-dir:/root/.openclaw-instances}")
     private String instanceBaseDir;
 
+    @Autowired
+    private ApprovalService approvalService;
+
     // Track running processes: instanceId -> Process
     private final Map<Long, Process> runningProcesses = new ConcurrentHashMap<>();
 
-    public XclawInstance createInstance(CreateXclawRequest req) {
+    /**
+     * Create instance with user context for approval.
+     * @param userId null if no auth (legacy) or admin
+     * @param role null if no auth (legacy), "ADMIN" to skip approval
+     * @param requesterName username for approval record
+     */
+    public XclawInstance createInstance(CreateXclawRequest req, Long userId, String role, String requesterName) {
         int port = findAvailablePort();
 
         XclawInstance instance = new XclawInstance();
         instance.setName(req.getName());
         instance.setDescription(req.getDescription());
         instance.setConfigJson(req.getConfigJson());
-        instance.setStatus("CREATING");
+        instance.setUserId(userId);
         instance.setPort(port);
-        save(instance);
 
-        // Async: start OpenClaw gateway
-        new Thread(() -> startOpenClawGateway(instance)).start();
+        // Admin or no-auth (legacy): create directly
+        if (role == null || "ADMIN".equals(role)) {
+            instance.setStatus("CREATING");
+            save(instance);
+            new Thread(() -> startOpenClawGateway(instance)).start();
+        } else {
+            // Regular user: pending approval
+            instance.setStatus("PENDING_APPROVAL");
+            save(instance);
+
+            Approval approval = new Approval();
+            approval.setInstanceId(instance.getId());
+            approval.setUserId(userId);
+            approval.setInstanceName(instance.getName());
+            approval.setInstanceDescription(instance.getDescription());
+            approval.setRequesterName(requesterName);
+            approval.setStatus("PENDING");
+            approvalService.save(approval);
+        }
 
         return instance;
+    }
+
+    /** Admin approves and starts the instance */
+    public void approveAndStartInstance(Long instanceId) {
+        XclawInstance instance = getById(instanceId);
+        if (instance == null) return;
+        instance.setStatus("CREATING");
+        instance.setErrorMsg(null);
+        updateById(instance);
+        new Thread(() -> startOpenClawGateway(instance)).start();
     }
 
     private void startOpenClawGateway(XclawInstance instance) {
@@ -112,7 +149,7 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
             pb.environment().put("OPENCLAW_STATE_DIR", instanceDir.toString());
             pb.environment().put("OPENCLAW_CONFIG_PATH", instanceDir.resolve("openclaw.json").toString());
             pb.environment().put("OPENCLAW_SERVICE_KIND", "gateway");
-            pb.environment().put("NODE_OPTIONS", "--require /root/.openclaw-instances/csp-patch.js");
+            pb.environment().put("NODE_OPTIONS", "--require /usr/local/share/xclaw/csp-patch.js");
             pb.redirectError(new File("/tmp/xclaw-oc-" + instance.getId() + ".log"));
             pb.redirectOutput(new File("/tmp/xclaw-oc-" + instance.getId() + ".log"));
 
@@ -192,8 +229,14 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
         updateById(instance);
     }
 
-    public List<XclawInstance> listAll() {
-        return list(new LambdaQueryWrapper<XclawInstance>().orderByDesc(XclawInstance::getCreatedAt));
+    public List<XclawInstance> listAll(Long userId, String role) {
+        LambdaQueryWrapper<XclawInstance> wrapper = new LambdaQueryWrapper<XclawInstance>()
+                .orderByDesc(XclawInstance::getCreatedAt);
+        // Non-admin users only see their own instances
+        if (userId != null && !"ADMIN".equals(role)) {
+            wrapper.eq(XclawInstance::getUserId, userId);
+        }
+        return list(wrapper);
     }
 
     private int findAvailablePort() {

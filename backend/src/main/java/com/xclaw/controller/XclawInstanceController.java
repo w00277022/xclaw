@@ -3,6 +3,7 @@ package com.xclaw.controller;
 import com.xclaw.dto.CreateXclawRequest;
 import com.xclaw.entity.XclawInstance;
 import com.xclaw.service.XclawInstanceService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -18,13 +19,18 @@ public class XclawInstanceController {
     private final XclawInstanceService instanceService;
 
     @PostMapping
-    public ResponseEntity<XclawInstance> create(@RequestBody CreateXclawRequest req) {
-        return ResponseEntity.ok(instanceService.createInstance(req));
+    public ResponseEntity<XclawInstance> create(@RequestBody CreateXclawRequest req, HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute("userId");
+        String role = (String) request.getAttribute("role");
+        String username = (String) request.getAttribute("username");
+        return ResponseEntity.ok(instanceService.createInstance(req, userId, role, username));
     }
 
     @GetMapping
-    public ResponseEntity<List<XclawInstance>> list() {
-        return ResponseEntity.ok(instanceService.listAll());
+    public ResponseEntity<List<XclawInstance>> list(HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute("userId");
+        String role = (String) request.getAttribute("role");
+        return ResponseEntity.ok(instanceService.listAll(userId, role));
     }
 
     @GetMapping("/{id}")

@@ -279,6 +279,25 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
         }
     }
 
+    public void startInstance(Long id) {
+        XclawInstance instance = getById(id);
+        if (instance == null) throw new RuntimeException("Instance not found");
+        if ("hermes".equals(instance.getType())) {
+            startHermesContainer(instance);
+        } else {
+            // Always kill any lingering process and restart with fresh config.
+            // This ensures remoteAccess / bind changes take effect on restart.
+            killOpenClawProcess(id);
+            if (instance.getContainerId() != null && instance.getContainerId().startsWith("pid:")) {
+                killByPid(instance.getContainerId());
+            }
+            if (instance.getPort() != null && instance.getPort() > 0) {
+                killByPort(instance.getPort());
+            }
+            startOpenClawGateway(instance);
+        }
+    }
+
     public void stopInstance(Long id) {
         XclawInstance instance = getById(id);
         if (instance == null) throw new RuntimeException("Instance not found");
@@ -330,9 +349,18 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
         } else {
             Process p = runningProcesses.get(id);
             if (p != null && p.isAlive()) {
+                // Process tracked in-memory and alive
                 instance.setStatus("RUNNING");
             } else if ("RUNNING".equals(instance.getStatus())) {
-                instance.setStatus("STOPPED");
+                // Process not in memory map (e.g. after backend restart).
+                // Fall back to checking the stored PID in containerId.
+                if (isPidAlive(instance.getContainerId())) {
+                    // Process is still alive — keep RUNNING
+                    log.info("Instance {} process still alive (checked by stored PID), keeping RUNNING", id);
+                } else {
+                    instance.setStatus("STOPPED");
+                    log.info("Instance {} process not alive (PID check failed), marking STOPPED", id);
+                }
             }
         }
         updateById(instance);

@@ -151,8 +151,7 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
             String configJson = """
             {
               "meta": {"lastTouchedVersion": "2026.4.15", "lastTouchedAt": "2026-05-04T00:00:00.000Z"},
-              "gateway": {"port": %d, "bind": "%s", "mode": "local"%s},
-              "controlUi": {"allowedOrigins": ["*"]},
+              "gateway": {"port": %d, "bind": "%s", "mode": "local", "controlUi": {"allowedOrigins": ["*"]}%s},
               "models": {
                 "providers": {
                   "custom": {

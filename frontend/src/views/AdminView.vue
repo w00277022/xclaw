@@ -1,13 +1,13 @@
 <template>
-  <div style="padding: 30px">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px">
-      <h2>👥 用户管理</h2>
+  <div style="padding: 16px">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px">
+      <h2 style="margin: 0; font-size: 18px">👥 用户管理</h2>
       <el-button type="primary" @click="showAddDialog = true">
         <el-icon style="margin-right: 5px"><Plus /></el-icon>添加用户
       </el-button>
     </div>
 
-    <el-table :data="users" stripe border style="width: 100%" v-loading="loading">
+    <el-table :data="users" stripe border style="width: 100%" size="small" v-loading="loading">
       <el-table-column prop="id" label="ID" width="80" />
       <el-table-column prop="username" label="用户名" width="150" />
       <el-table-column prop="displayName" label="显示名称" width="150" />
@@ -64,14 +64,14 @@
       </el-table-column>
     </el-table>
 
-    <div v-if="!users.length && !loading" style="text-align: center; padding: 60px; color: #999">
+    <div v-if="!users.length && !loading" style="text-align: center; padding: 30px; color: #999">
       <div style="font-size: 32px; margin-bottom: 10px">📭</div>
       <div>暂无用户数据</div>
     </div>
 
     <!-- Add User Dialog -->
-    <el-dialog v-model="showAddDialog" title="添加用户" width="450px" :close-on-click-modal="false">
-      <el-form :model="addForm" :rules="addRules" ref="addFormRef" label-width="100px">
+    <el-dialog v-model="showAddDialog" title="添加用户" width="420px" :close-on-click-modal="false">
+      <el-form :model="addForm" :rules="addRules" ref="addFormRef" label-width="90px" size="small">
         <el-form-item label="用户名" prop="username">
           <el-input v-model="addForm.username" placeholder="3-20位字母数字" />
         </el-form-item>

@@ -128,23 +128,27 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
     /**
      * Handle chat for Hermes-agent instances via HTTP API.
-     * Hermes exposes a REST endpoint for dispatching tasks.
+     * Hermes container runs an HTTP bridge on port 3100 (mapped to instance port).
+     * POST /api/chat accepts {"task": "...", "sessionKey": "..."} and returns {"result": "..."}.
      */
     private void handleHermesChat(WebSocketSession session, XclawInstance instance,
             String userMessage, String sessionKey, Long instanceId) {
         CompletableFuture.runAsync(() -> {
             try {
                 int port = instance.getPort();
-                String hermesUrl = "http://localhost:" + port + "/api/dispatch";
+                String hermesUrl = "http://localhost:" + port + "/api/chat";
 
                 ObjectNode reqBody = objectMapper.createObjectNode();
                 reqBody.put("task", userMessage);
                 reqBody.put("sessionKey", sessionKey);
 
-                HttpClient httpClient = HttpClient.newHttpClient();
+                HttpClient httpClient = HttpClient.newBuilder()
+                    .connectTimeout(java.time.Duration.ofSeconds(5))
+                    .build();
                 java.net.http.HttpRequest httpRequest = java.net.http.HttpRequest.newBuilder()
                     .uri(URI.create(hermesUrl))
                     .header("Content-Type", "application/json")
+                    .timeout(java.time.Duration.ofMinutes(5))
                     .POST(java.net.http.HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(reqBody)))
                     .build();
 
@@ -160,8 +164,19 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                     sendChunk(session, "", true);
                     chatMessageService.saveMessage(instanceId, sessionKey, "assistant", content);
                 } else {
-                    sendError(session, "Hermes返回错误: HTTP " + response.statusCode());
+                    String errBody = response.body();
+                    String errMsg = "Hermes返回错误: HTTP " + response.statusCode();
+                    try {
+                        JsonNode errJson = objectMapper.readTree(errBody);
+                        errMsg += " - " + errJson.path("error").asText("");
+                    } catch (Exception ignored) {
+                        if (errBody != null && errBody.length() < 200) errMsg += " - " + errBody;
+                    }
+                    sendError(session, errMsg);
                 }
+            } catch (java.net.ConnectException e) {
+                log.error("Hermes container not reachable on port {} for instance {}", instance.getPort(), instanceId, e);
+                sendError(session, "Hermes容器未就绪，请稍后重试 (端口 " + instance.getPort() + ")");
             } catch (Exception e) {
                 log.error("Failed to chat with Hermes instance {}", instanceId, e);
                 sendError(session, "Hermes连接失败: " + e.getMessage());

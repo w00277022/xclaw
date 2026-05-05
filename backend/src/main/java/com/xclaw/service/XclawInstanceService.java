@@ -285,6 +285,9 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
     @Value("${hermes.docker.image:hermes-agent:latest}")
     private String hermesDockerImage;
 
+    /** Hermes container internal port — the HTTP bridge listens on this port inside the container */
+    private static final int HERMES_INTERNAL_PORT = 3100;
+
     private void startHermesContainer(XclawInstance instance) {
         try {
             String instanceId = String.valueOf(instance.getId());
@@ -309,18 +312,54 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
             Path instanceDir = Path.of(instanceBaseDir, instanceId);
             Files.createDirectories(instanceDir.resolve("workspace"));
 
-            // Run Hermes container
+            // Prepare hermes home directory with config
+            Path hermesHome = instanceDir.resolve("hermes-home");
+            Files.createDirectories(hermesHome);
+
+            // Write .env for Hermes LLM configuration
+            // Hermes uses provider-specific env vars; we configure it for custom OpenAI-compatible endpoint
+            String envContent = String.format("""
+                OPENAI_API_KEY=%s
+                OPENAI_BASE_URL=%s/v1
+                """, llmKey, llmUrl);
+            Files.writeString(hermesHome.resolve(".env"), envContent);
+
+            // Write config.yaml with model and provider settings
+            String configYaml = String.format("""
+                model:
+                  default: "%s"
+                  provider: "custom"
+                  base_url: "%s/v1"
+                terminal:
+                  backend: local
+                  timeout: 120
+                """, llmModel, llmUrl);
+            Files.writeString(hermesHome.resolve("config.yaml"), configYaml);
+
+            // Copy HTTP bridge script into container
+            Path bridgeScript = Path.of(System.getProperty("user.home"), ".openclaw/workspace/xclaw-platform/docker/hermes-http-bridge.py");
+
+            // Run Hermes container with:
+            // - Port mapping: hostPort -> 3100 (container internal)
+            // - HTTP bridge as entrypoint (overrides default ACP+gateway)
+            // - Mount hermes home for config persistence
+            // - Mount workspace for file persistence
             ProcessBuilder pb = new ProcessBuilder(
                 "docker", "run", "-d",
                 "--name", containerName,
-                "-p", instance.getPort() + ":" + instance.getPort(),
-                "-v", instanceDir.resolve("workspace").toString() + ":/home/hermes/workspace",
-                "-e", "HERMES_PORT=" + instance.getPort(),
-                "-e", "LLM_BASE_URL=" + llmUrl,
-                "-e", "LLM_API_KEY=" + llmKey,
-                "-e", "LLM_MODEL=" + llmModel,
+                "-p", instance.getPort() + ":" + HERMES_INTERNAL_PORT,
+                "-v", instanceDir.resolve("workspace").toString() + ":/opt/data/workspace",
+                "-v", hermesHome.toString() + ":/opt/data",
+                "-v", bridgeScript.toString() + ":/opt/hermes/hermes-http-bridge.py:ro",
+                "-e", "HERMES_HTTP_PORT=" + HERMES_INTERNAL_PORT,
+                "-e", "ACP_TCP_PORT=" + HERMES_INTERNAL_PORT,
+                "-e", "OPENAI_API_KEY=" + llmKey,
+                "-e", "OPENAI_BASE_URL=" + llmUrl + "/v1",
+                "-e", "HERMES_MODEL=" + llmModel,
                 "--restart", "unless-stopped",
-                hermesDockerImage
+                "--entrypoint", "bash",
+                hermesDockerImage,
+                "-c", "source /opt/hermes/.venv/bin/activate && python3 /opt/hermes/hermes-http-bridge.py"
             );
             pb.redirectError(new File("/tmp/xclaw-hermes-" + instance.getId() + ".log"));
             pb.redirectOutput(new File("/tmp/xclaw-hermes-" + instance.getId() + ".log"));
@@ -328,7 +367,9 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
             Process process = pb.start();
             int exitCode = process.waitFor();
             if (exitCode != 0) {
-                throw new RuntimeException("docker run failed with exit code " + exitCode);
+                // Read docker logs for error details
+                String logs = readDockerLogs(containerName);
+                throw new RuntimeException("docker run failed with exit code " + exitCode + ": " + logs);
             }
 
             // Get container ID
@@ -339,7 +380,12 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
             String containerId = reader.readLine();
             inspectProc.waitFor();
 
-            Thread.sleep(2000); // Wait for container to start
+            // Wait for HTTP bridge to become ready
+            boolean ready = waitForHermesReady(instance.getPort(), 15);
+            if (!ready) {
+                String logs = readDockerLogs(containerName);
+                throw new RuntimeException("Hermes HTTP bridge 未就绪: " + logs);
+            }
 
             instance.setStatus("RUNNING");
             instance.setContainerId(containerId != null ? containerId.trim() : containerName);
@@ -353,6 +399,41 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
             instance.setStatus("ERROR");
             instance.setErrorMsg("Hermes启动失败: " + e.getMessage());
             updateById(instance);
+        }
+    }
+
+    /** Wait for Hermes HTTP bridge to respond to /health */
+    private boolean waitForHermesReady(int port, int maxRetries) {
+        for (int i = 0; i < maxRetries; i++) {
+            try {
+                java.net.HttpURLConnection conn = (java.net.HttpURLConnection)
+                    new java.net.URL("http://localhost:" + port + "/health").openConnection();
+                conn.setRequestMethod("GET");
+                conn.setConnectTimeout(1000);
+                conn.setReadTimeout(1000);
+                if (conn.getResponseCode() == 200) return true;
+            } catch (Exception ignored) {}
+            try { Thread.sleep(1000); } catch (InterruptedException e) { return false; }
+        }
+        return false;
+    }
+
+    /** Read recent docker container logs */
+    private String readDockerLogs(String containerName) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder("docker", "logs", "--tail", "20", containerName);
+            pb.redirectError(new File("/dev/null"));
+            Process proc = pb.start();
+            BufferedReader reader = new BufferedReader(new InputStreamReader(proc.getInputStream()));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                sb.append(line).append("\n");
+            }
+            proc.waitFor();
+            return sb.toString().trim();
+        } catch (Exception e) {
+            return "(无法读取日志: " + e.getMessage() + ")";
         }
     }
 

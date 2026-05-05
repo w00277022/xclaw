@@ -88,6 +88,7 @@
         <!-- Info bar -->
         <div style="padding: 10px 20px; border-bottom: 1px solid #e4e7ed; display: flex; align-items: center; gap: 12px; background: #fff">
           <span style="font-weight: 600; font-size: 15px">{{ selected.name }}</span>
+          <el-tag size="small" :type="selected.type === 'hermes' ? 'warning' : 'primary'" effect="plain">{{ selected.type === 'hermes' ? '🤖 Hermes' : '🦞 OpenClaw' }}</el-tag>
           <el-tag size="small" :type="statusType(selected.status)">{{ selected.status === 'RUNNING' ? '运行中' : selected.status }}</el-tag>
           <span style="color: #999; font-size: 13px; margin-left: auto">
             <el-icon><Link /></el-icon>
@@ -161,6 +162,10 @@ onMounted(() => window.addEventListener('storage', onStorage))
 
 const iframeUrl = computed(() => {
   if (!selected.value) return ''
+  if (selected.value.type === 'hermes') {
+    // Hermes instances serve their own chat UI at the root
+    return `http://localhost:${selected.value.port}`
+  }
   return `http://localhost:${selected.value.port}`
 })
 

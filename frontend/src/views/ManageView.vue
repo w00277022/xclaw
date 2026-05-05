@@ -1,9 +1,9 @@
 <template>
-  <div style="padding: 30px">
+  <div style="padding: 16px">
     <el-tabs v-model="activeTab" type="border-card">
       <!-- 实例列表 Tab -->
       <el-tab-pane label="实例列表" name="instances">
-        <el-table :data="instances" stripe border style="width: 100%" v-loading="loading">
+        <el-table :data="instances" stripe border style="width: 100%" size="small" v-loading="loading">
           <el-table-column prop="id" label="ID" width="80" />
           <el-table-column prop="name" label="名称" width="150" />
           <el-table-column prop="type" label="类型" width="140">
@@ -39,7 +39,7 @@
           <div style="font-size: 32px; margin-bottom: 10px">✅</div>
           <div>暂无待审批的实例</div>
         </div>
-        <el-table v-else :data="approvals" stripe border style="width: 100%" v-loading="approvalLoading">
+        <el-table v-else :data="approvals" stripe border style="width: 100%" size="small" v-loading="approvalLoading">
           <el-table-column prop="instanceName" label="实例名称" width="150" />
           <el-table-column prop="instanceDescription" label="实例描述" min-width="150" show-overflow-tooltip />
           <el-table-column prop="requesterName" label="申请人" width="120" />
@@ -62,8 +62,8 @@
     </el-tabs>
 
     <!-- 拒绝原因弹窗 -->
-    <el-dialog v-model="rejectDialogVisible" title="拒绝审批" width="400px">
-      <el-input v-model="rejectReason" type="textarea" :rows="3" placeholder="请输入拒绝原因" />
+    <el-dialog v-model="rejectDialogVisible" title="拒绝审批" width="380px">
+      <el-input v-model="rejectReason" type="textarea" :rows="3" placeholder="请输入拒绝原因" size="small" />
       <template #footer>
         <el-button @click="rejectDialogVisible = false">取消</el-button>
         <el-button type="danger" @click="confirmReject" :loading="rejectingId">确认拒绝</el-button>

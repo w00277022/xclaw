@@ -17,11 +17,18 @@ public class UserService extends ServiceImpl<UserMapper, User> {
     }
 
     public User createUser(String username, String password, String displayName, String role) {
+        return createUser(username, password, displayName, role, true, false);
+    }
+
+    public User createUser(String username, String password, String displayName, String role,
+                           Boolean canCreateOpenclaw, Boolean canCreateHermes) {
         User user = new User();
         user.setUsername(username);
         user.setPassword(passwordEncoder.encode(password));
         user.setDisplayName(displayName);
         user.setRole(role != null ? role : "USER");
+        user.setCanCreateOpenclaw(canCreateOpenclaw != null ? canCreateOpenclaw : true);
+        user.setCanCreateHermes(canCreateHermes != null ? canCreateHermes : false);
         save(user);
         return user;
     }

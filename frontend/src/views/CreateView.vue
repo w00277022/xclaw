@@ -22,13 +22,30 @@
     <el-form :model="form" label-width="100px" style="margin-top: 30px">
       <el-form-item label="实例类型">
         <el-radio-group v-model="form.type">
-          <el-radio-button value="openclaw">
-            <span style="display: inline-flex; align-items: center; gap: 4px">🦞 OpenClaw</span>
-          </el-radio-button>
-          <el-radio-button value="hermes">
-            <span style="display: inline-flex; align-items: center; gap: 4px">🤖 Hermes-Agent</span>
-          </el-radio-button>
+          <template v-if="allowedTypes.openclaw">
+            <el-radio-button value="openclaw">
+              <span style="display: inline-flex; align-items: center; gap: 4px">🦞 OpenClaw</span>
+            </el-radio-button>
+          </template>
+          <template v-else>
+            <el-radio-button value="openclaw" disabled>
+              <span style="display: inline-flex; align-items: center; gap: 4px; opacity: 0.5">🦞 OpenClaw (无权限)</span>
+            </el-radio-button>
+          </template>
+          <template v-if="allowedTypes.hermes">
+            <el-radio-button value="hermes">
+              <span style="display: inline-flex; align-items: center; gap: 4px">🤖 Hermes-Agent</span>
+            </el-radio-button>
+          </template>
+          <template v-else>
+            <el-radio-button value="hermes" disabled>
+              <span style="display: inline-flex; align-items: center; gap: 4px; opacity: 0.5">🤖 Hermes-Agent (无权限)</span>
+            </el-radio-button>
+          </template>
         </el-radio-group>
+        <div v-if="!allowedTypes.openclaw && !allowedTypes.hermes" style="color: #f56c6c; font-size: 12px; margin-top: 8px">
+          您当前没有创建任何类型实例的权限，请联系管理员
+        </div>
       </el-form-item>
       <el-form-item label="实例名称">
         <el-input v-model="form.name" placeholder="输入实例名称" />
@@ -40,27 +57,71 @@
         <el-input v-model="form.configJson" type="textarea" :rows="4" placeholder='可选，JSON 格式，如 {"model": "ark/glm-5.1"}' />
       </el-form-item>
       <el-form-item>
-        <el-button type="primary" @click="handleCreate" :loading="loading">创建</el-button>
+        <el-button
+          type="primary"
+          @click="handleCreate"
+          :loading="loading"
+          :disabled="!allowedTypes.openclaw && !allowedTypes.hermes"
+        >创建</el-button>
       </el-form-item>
     </el-form>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { xclawApi, isAdmin } from '../api'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { xclawApi, getCurrentUser } from '../api'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const loading = ref(false)
-const form = ref({ name: '', description: '', configJson: '', type: 'openclaw' })
+const form = reactive({ name: '', description: '', configJson: '', type: 'openclaw' })
+
+const user = computed(() => getCurrentUser())
+const isAdmin = computed(() => user.value?.role === 'ADMIN')
+const allowedTypes = reactive({ openclaw: true, hermes: false })
+
+// Load allowed types from API
+const loadAllowedTypes = async () => {
+  try {
+    const { data } = await xclawApi.allowedTypes()
+    if (Array.isArray(data)) {
+      for (const t of data) {
+        allowedTypes[t.type] = t.allowed
+      }
+      // Auto-select first allowed type if current selection not allowed
+      if (!allowedTypes[form.type]) {
+        if (allowedTypes.openclaw) form.type = 'openclaw'
+        else if (allowedTypes.hermes) form.type = 'hermes'
+      }
+    }
+  } catch {
+    // Fallback: use localStorage user data
+    if (user.value) {
+      allowedTypes.openclaw = user.value.canCreateOpenclaw !== false
+      allowedTypes.hermes = user.value.canCreateHermes === true
+    }
+    if (isAdmin.value) {
+      allowedTypes.openclaw = true
+      allowedTypes.hermes = true
+    }
+    if (!allowedTypes[form.type]) {
+      if (allowedTypes.openclaw) form.type = 'openclaw'
+      else if (allowedTypes.hermes) form.type = 'hermes'
+    }
+  }
+}
 
 const handleCreate = async () => {
-  if (!form.value.name) { ElMessage.warning('请输入实例名称'); return }
+  if (!form.name) { ElMessage.warning('请输入实例名称'); return }
+  if (!allowedTypes[form.type]) {
+    ElMessage.error('您没有创建该类型实例的权限')
+    return
+  }
   loading.value = true
   try {
-    const { data } = await xclawApi.create(form.value)
+    const { data } = await xclawApi.create({ ...form })
     if (data.status === 'PENDING_APPROVAL') {
       ElMessage.info('创建成功！实例需等待管理员审批后启动')
     } else if (data.status === 'RUNNING' && data.errorMsg) {
@@ -79,4 +140,6 @@ const handleCreate = async () => {
     loading.value = false
   }
 }
+
+onMounted(loadAllowedTypes)
 </script>

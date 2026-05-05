@@ -3,9 +3,9 @@
     <!-- Sidebar -->
     <el-aside :width="isCollapsed ? '64px' : '220px'" style="background: #304156; display: flex; flex-direction: column; overflow: hidden; transition: width 0.3s ease">
       <!-- Sidebar Top: Logo + Toggle -->
-      <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #4a5a6a; gap: 8px; height: 48px; flex-shrink: 0">
-        <span style="color: #fff; font-size: 16px; font-weight: bold; white-space: nowrap; overflow: hidden">
-          <span style="font-size: 20px">🦞</span>
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #4a5a6a; gap: 6px; height: 40px; flex-shrink: 0">
+        <span style="color: #fff; font-size: 15px; font-weight: bold; white-space: nowrap; overflow: hidden">
+          <span style="font-size: 18px">🦞</span>
           <span v-show="!isCollapsed"> XClaw</span>
         </span>
         <el-icon
@@ -52,7 +52,7 @@
       <!-- Sidebar Bottom: User Info + Logout (hover to reveal) -->
       <div
         class="sidebar-user-area"
-        style="border-top: 1px solid #4a5a6a; padding: 12px; flex-shrink: 0"
+        style="border-top: 1px solid #4a5a6a; padding: 8px 10px; flex-shrink: 0"
         :style="{ display: 'flex', flexDirection: isCollapsed ? 'column' : 'row', alignItems: 'center', gap: isCollapsed ? '6px' : '8px', justifyContent: 'center' }"
       >
         <div :style="{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden' }">

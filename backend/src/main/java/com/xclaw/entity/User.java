@@ -13,6 +13,8 @@ public class User {
     private String password;
     private String displayName;
     private String role; // ADMIN, USER
+    private Boolean canCreateOpenclaw = true;  // 可创建 OpenClaw 实例
+    private Boolean canCreateHermes = false;   // 可创建 Hermes-Agent 实例
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

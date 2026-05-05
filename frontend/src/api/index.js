@@ -44,6 +44,7 @@ export const xclawApi = {
   stop: (id) => api.post(`/xclaw/${id}/stop`),
   delete: (id) => api.delete(`/xclaw/${id}`),
   sync: (id) => api.post(`/xclaw/${id}/sync`),
+  allowedTypes: () => api.get('/xclaw/allowed-types'),
 }
 
 // Chat API
@@ -73,6 +74,7 @@ export const userApi = {
   create: (data) => api.post('/users', data),
   delete: (id) => api.delete(`/users/${id}`),
   updateRole: (id, role) => api.put(`/users/${id}/role`, { role }),
+  update: (id, data) => api.put(`/users/${id}`, data),
 }
 
 // Helper: get current user from localStorage

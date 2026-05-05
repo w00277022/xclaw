@@ -34,12 +34,7 @@ public class AuthController {
                 "code", 200,
                 "message", "登录成功",
                 "token", token,
-                "user", Map.of(
-                        "id", user.getId(),
-                        "username", user.getUsername(),
-                        "displayName", user.getDisplayName(),
-                        "role", user.getRole()
-                )
+                "user", userToMap(user)
         ));
     }
 
@@ -63,12 +58,7 @@ public class AuthController {
                 "code", 200,
                 "message", "注册成功",
                 "token", token,
-                "user", Map.of(
-                        "id", user.getId(),
-                        "username", user.getUsername(),
-                        "displayName", user.getDisplayName(),
-                        "role", user.getRole()
-                )
+                "user", userToMap(user)
         ));
     }
 
@@ -84,12 +74,18 @@ public class AuthController {
         }
         return ResponseEntity.ok(Map.of(
                 "code", 200,
-                "user", Map.of(
-                        "id", user.getId(),
-                        "username", user.getUsername(),
-                        "displayName", user.getDisplayName(),
-                        "role", user.getRole()
-                )
+                "user", userToMap(user)
         ));
+    }
+
+    private Map<String, Object> userToMap(User user) {
+        return Map.of(
+                "id", user.getId(),
+                "username", user.getUsername(),
+                "displayName", user.getDisplayName(),
+                "role", user.getRole(),
+                "canCreateOpenclaw", user.getCanCreateOpenclaw() != null && user.getCanCreateOpenclaw(),
+                "canCreateHermes", user.getCanCreateHermes() != null && user.getCanCreateHermes()
+        );
     }
 }

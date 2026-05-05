@@ -43,6 +43,9 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
     @Autowired
     private ApprovalService approvalService;
 
+    @Autowired
+    private com.xclaw.service.UserService userService;
+
     // Track running processes: instanceId -> Process
     private final Map<Long, Process> runningProcesses = new ConcurrentHashMap<>();
 
@@ -56,6 +59,19 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
         int port = findAvailablePort();
         String type = req.getType();
         if (type == null || type.isEmpty()) type = "openclaw";
+
+        // Check user permissions for instance type
+        if (userId != null && !"ADMIN".equals(role)) {
+            com.xclaw.entity.User user = userService.getById(userId);
+            if (user != null) {
+                if ("hermes".equals(type) && (user.getCanCreateHermes() == null || !user.getCanCreateHermes())) {
+                    throw new RuntimeException("您没有创建 Hermes-Agent 实例的权限，请联系管理员");
+                }
+                if ("openclaw".equals(type) && (user.getCanCreateOpenclaw() == null || !user.getCanCreateOpenclaw())) {
+                    throw new RuntimeException("您没有创建 OpenClaw 实例的权限，请联系管理员");
+                }
+            }
+        }
 
         XclawInstance instance = new XclawInstance();
         instance.setName(req.getName());

@@ -16,7 +16,7 @@ public class DataInitializer implements CommandLineRunner {
     @Override
     public void run(String... args) {
         if (userService.findByUsername("admin") == null) {
-            userService.createUser("admin", "admin123", "系统管理员", "ADMIN");
+            userService.createUser("admin", "admin123", "系统管理员", "ADMIN", true, true);
             log.info("Default admin user created: admin/admin123");
         } else {
             log.info("Admin user already exists");

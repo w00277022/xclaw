@@ -7,6 +7,8 @@ import com.xclaw.service.UserService;
 import com.xclaw.service.XclawInstanceService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,13 +25,32 @@ public class XclawInstanceController {
     private final XclawInstanceService instanceService;
     private final UserService userService;
 
+    @Value("${xclaw.host:localhost}")
+    private String xclawHost;
+
+    /** Populate the url field on an instance based on host + port */
+    private void populateUrl(XclawInstance inst) {
+        if (inst != null && inst.getPort() != null) {
+            inst.setUrl("http://" + xclawHost + ":" + inst.getPort());
+        }
+    }
+
+    /** Populate url on a list of instances */
+    private void populateUrls(List<XclawInstance> instances) {
+        for (XclawInstance inst : instances) {
+            populateUrl(inst);
+        }
+    }
+
     @PostMapping
     public ResponseEntity<?> create(@RequestBody CreateXclawRequest req, HttpServletRequest request) {
         Long userId = (Long) request.getAttribute("userId");
         String role = (String) request.getAttribute("role");
         String username = (String) request.getAttribute("username");
         try {
-            return ResponseEntity.ok(instanceService.createInstance(req, userId, role, username));
+            XclawInstance instance = instanceService.createInstance(req, userId, role, username);
+            populateUrl(instance);
+            return ResponseEntity.ok(instance);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("code", 400, "message", e.getMessage()));
         }
@@ -39,12 +60,16 @@ public class XclawInstanceController {
     public ResponseEntity<List<XclawInstance>> list(HttpServletRequest request) {
         Long userId = (Long) request.getAttribute("userId");
         String role = (String) request.getAttribute("role");
-        return ResponseEntity.ok(instanceService.listAll(userId, role));
+        List<XclawInstance> instances = instanceService.listAll(userId, role);
+        populateUrls(instances);
+        return ResponseEntity.ok(instances);
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<XclawInstance> get(@PathVariable Long id) {
-        return ResponseEntity.ok(instanceService.getById(id));
+        XclawInstance inst = instanceService.getById(id);
+        populateUrl(inst);
+        return ResponseEntity.ok(inst);
     }
 
     @PostMapping("/{id}/start")

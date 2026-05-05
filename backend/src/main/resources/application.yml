@@ -28,6 +28,9 @@ jwt:
   secret: xclaw-platform-jwt-secret-key-2026-must-be-at-least-256-bits-long
   expiration: 86400000
 
+xclaw:
+  host: localhost
+
 openclaw:
   backend:
     url: https://api.deepseek.com

@@ -18,6 +18,11 @@ public class XclawInstance {
     private String type; // openclaw, hermes
     private String description;
     private String errorMsg;
+
+    /** Instance access URL (computed, not persisted). Example: http://{host}:{port} */
+    @TableField(exist = false)
+    private String url;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

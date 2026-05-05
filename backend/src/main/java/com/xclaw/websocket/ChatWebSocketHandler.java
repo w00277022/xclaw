@@ -33,6 +33,9 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
     private static final byte[] ED25519_SPKI_PREFIX = hexToBytes("302a300506032b6570032100");
 
+    @Value("${xclaw.host:localhost}")
+    private String xclawHost;
+
     public ChatWebSocketHandler(XclawInstanceService instanceService, ChatMessageService chatMessageService) {
         this.instanceService = instanceService;
         this.chatMessageService = chatMessageService;
@@ -136,7 +139,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         CompletableFuture.runAsync(() -> {
             try {
                 int port = instance.getPort();
-                String hermesUrl = "http://localhost:" + port + "/api/chat";
+                String hermesUrl = "http://" + xclawHost + ":" + port + "/api/chat";
 
                 ObjectNode reqBody = objectMapper.createObjectNode();
                 reqBody.put("task", userMessage);
@@ -189,7 +192,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         CompletableFuture.runAsync(() -> {
             try {
                 int port = instance.getPort();
-                log.info("Connecting to OpenClaw gateway at ws://localhost:{} sessionKey={}", port, ocSessionKey);
+                log.info("Connecting to OpenClaw gateway at ws://{}:{} sessionKey={}", xclawHost, port, ocSessionKey);
 
                 KeyPairGenerator keyGen = KeyPairGenerator.getInstance("Ed25519");
                 KeyPair keyPair = keyGen.generateKeyPair();
@@ -201,7 +204,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
                 HttpClient httpClient = HttpClient.newHttpClient();
                 httpClient.newWebSocketBuilder()
-                    .buildAsync(URI.create("ws://localhost:" + port),
+                    .buildAsync(URI.create("ws://" + xclawHost + ":" + port),
                         makeOcListener(session, keyPair, deviceId, pubKeyB64url,
                             userMessage, ocSessionKey, instanceId))
                     .get(10, TimeUnit.SECONDS);

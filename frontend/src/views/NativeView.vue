@@ -92,7 +92,7 @@
           <el-tag size="small" :type="statusType(selected.status)">{{ selected.status === 'RUNNING' ? '运行中' : selected.status }}</el-tag>
           <span style="color: #999; font-size: 13px; margin-left: auto">
             <el-icon><Link /></el-icon>
-            http://localhost:{{ selected.port }}
+            {{ selected.url || `http://localhost:${selected.port}` }}
           </span>
         </div>
 
@@ -162,11 +162,8 @@ onMounted(() => window.addEventListener('storage', onStorage))
 
 const iframeUrl = computed(() => {
   if (!selected.value) return ''
-  if (selected.value.type === 'hermes') {
-    // Hermes instances serve their own chat UI at the root
-    return `http://localhost:${selected.value.port}`
-  }
-  return `http://localhost:${selected.value.port}`
+  // Use the url field from backend (auto-generated from xclaw.host config)
+  return selected.value.url || ''
 })
 
 const statusType = (s) => ({ RUNNING: 'success', STOPPED: 'info', ERROR: 'danger' }[s] || 'info')

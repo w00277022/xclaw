@@ -25,6 +25,9 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, XclawInstance> {
 
+    @Value("${xclaw.host:localhost}")
+    private String xclawHost;
+
     @Value("${openclaw.backend.url}")
     private String llmUrl;
 
@@ -423,7 +426,7 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
         for (int i = 0; i < maxRetries; i++) {
             try {
                 java.net.HttpURLConnection conn = (java.net.HttpURLConnection)
-                    new java.net.URL("http://localhost:" + port + "/health").openConnection();
+                    new java.net.URL("http://" + xclawHost + ":" + port + "/health").openConnection();
                 conn.setRequestMethod("GET");
                 conn.setConnectTimeout(1000);
                 conn.setReadTimeout(1000);

@@ -148,7 +148,7 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
 
             // Generate config JSON
             String gatewayAuthBlock = remoteAccess ? ", \"auth\": {\"token\": \"%s\"}".formatted(gatewayToken) : "";
-            String controlUiBlock = remoteAccess ? ", \"controlUi\": {\"allowedOrigins\": [\"*\"], \"dangerouslyAllowHostHeaderOriginFallback\": true}" : "";
+            String controlUiBlock = remoteAccess ? ", \"controlUi\": {\"allowedOrigins\": [\"*\"], \"dangerouslyAllowHostHeaderOriginFallback\": true, \"dangerouslyDisableDeviceAuth\": true}" : "";
             String configJson = """
             {
               "meta": {"lastTouchedVersion": "2026.4.15", "lastTouchedAt": "2026-05-04T00:00:00.000Z"},

@@ -134,15 +134,20 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
             Path instanceDir = Path.of(instanceBaseDir, instanceId);
             Files.createDirectories(instanceDir);
 
-            // Determine bind address
+            // Determine bind address. OpenClaw requires auth when binding to lan.
             String bindAddr = remoteAccess ? "lan" : "loopback";
+            String gatewayToken = null;
+            if (remoteAccess) {
+                gatewayToken = java.util.UUID.randomUUID().toString().replace("-", "");
+            }
             log.info("Starting OpenClaw instance {} with bind={} (remoteAccess={})", instanceId, bindAddr, remoteAccess);
 
             // Generate config JSON
+            String gatewayAuthBlock = remoteAccess ? ", \"auth\": {\"token\": \"%s\"}".formatted(gatewayToken) : "";
             String configJson = """
             {
               "meta": {"lastTouchedVersion": "2026.4.15", "lastTouchedAt": "2026-05-04T00:00:00.000Z"},
-              "gateway": {"port": %d, "bind": "%s", "mode": "local"},
+              "gateway": {"port": %d, "bind": "%s", "mode": "local"%s},
               "models": {
                 "providers": {
                   "custom": {
@@ -168,7 +173,8 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
               "wizard": {"lastRunAt": "2026-02-01T11:00:00.000Z", "lastRunVersion": "2026.1.30", "lastRunCommand": "onboard", "lastRunMode": "local"}
             }
             """.formatted(
-                instance.getPort(), bindAddr, llmUrl, llmKey,
+                instance.getPort(), bindAddr, gatewayAuthBlock,
+                llmUrl, llmKey,
                 llmModel, llmModel,
                 instanceDir.resolve("workspace").toString(),
                 llmModel, llmModel
@@ -178,13 +184,18 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
             Files.createDirectories(instanceDir.resolve("workspace"));
 
             // Start OpenClaw gateway process
-            ProcessBuilder pb = new ProcessBuilder(
+            java.util.ArrayList<String> cmd = new java.util.ArrayList<>(java.util.List.of(
                 "/usr/bin/node", openclawRuntime,
                 "gateway",
                 "--port", String.valueOf(instance.getPort()),
-                "--bind", bindAddr,
-                "--auth", "none"
-            );
+                "--bind", bindAddr
+            ));
+            if (gatewayToken != null) {
+                cmd.add("--token"); cmd.add(gatewayToken);
+            } else {
+                cmd.add("--auth"); cmd.add("none");
+            }
+            ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.environment().put("OPENCLAW_STATE_DIR", instanceDir.toString());
             pb.environment().put("OPENCLAW_CONFIG_PATH", instanceDir.resolve("openclaw.json").toString());
             pb.environment().put("OPENCLAW_SERVICE_KIND", "gateway");

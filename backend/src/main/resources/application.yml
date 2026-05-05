@@ -29,7 +29,7 @@ jwt:
   expiration: 86400000
 
 xclaw:
-  host: localhost
+  host: 172.16.10.224
   # 是否允许远程访问。设为 true 时 OpenClaw 实例将监听 0.0.0.0（所有网络接口），
   # 同时需将 xclaw.host 配置为外部可访问的 IP/主机名
   remote-access: false

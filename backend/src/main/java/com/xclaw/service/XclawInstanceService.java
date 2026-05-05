@@ -28,6 +28,9 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
     @Value("${xclaw.host:localhost}")
     private String xclawHost;
 
+    @Value("${xclaw.remote-access:false}")
+    private boolean remoteAccess;
+
     @Value("${openclaw.backend.url}")
     private String llmUrl;
 
@@ -131,11 +134,15 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
             Path instanceDir = Path.of(instanceBaseDir, instanceId);
             Files.createDirectories(instanceDir);
 
+            // Determine bind address
+            String bindAddr = remoteAccess ? "0.0.0.0" : "loopback";
+            log.info("Starting OpenClaw instance {} with bind={} (remoteAccess={})", instanceId, bindAddr, remoteAccess);
+
             // Generate config JSON
             String configJson = """
             {
               "meta": {"lastTouchedVersion": "2026.4.15", "lastTouchedAt": "2026-05-04T00:00:00.000Z"},
-              "gateway": {"port": %d, "bind": "loopback", "mode": "local"},
+              "gateway": {"port": %d, "bind": "%s", "mode": "local"},
               "models": {
                 "providers": {
                   "custom": {
@@ -161,7 +168,7 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
               "wizard": {"lastRunAt": "2026-02-01T11:00:00.000Z", "lastRunVersion": "2026.1.30", "lastRunCommand": "onboard", "lastRunMode": "local"}
             }
             """.formatted(
-                instance.getPort(), llmUrl, llmKey,
+                instance.getPort(), bindAddr, llmUrl, llmKey,
                 llmModel, llmModel,
                 instanceDir.resolve("workspace").toString(),
                 llmModel, llmModel
@@ -175,7 +182,7 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
                 "/usr/bin/node", openclawRuntime,
                 "gateway",
                 "--port", String.valueOf(instance.getPort()),
-                "--bind", "loopback",
+                "--bind", bindAddr,
                 "--auth", "none"
             );
             pb.environment().put("OPENCLAW_STATE_DIR", instanceDir.toString());

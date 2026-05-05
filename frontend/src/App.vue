@@ -11,8 +11,9 @@
           <Fold v-if="!isCollapsed" />
           <Expand v-else />
         </el-icon>
-        <span v-show="!isCollapsed" style="color: #fff; font-size: 16px; font-weight: bold; white-space: nowrap; overflow: hidden">
-          <span style="font-size: 20px">🦞</span> XClaw
+        <span style="color: #fff; font-size: 16px; font-weight: bold; white-space: nowrap; overflow: hidden">
+          <span style="font-size: 20px">🦞</span>
+          <span v-show="!isCollapsed"> XClaw</span>
         </span>
       </div>
 
@@ -48,8 +49,9 @@
         </el-menu-item>
       </el-menu>
 
-      <!-- Sidebar Bottom: User Info + Logout -->
+      <!-- Sidebar Bottom: User Info + Logout (hover to reveal) -->
       <div
+        class="sidebar-user-area"
         style="border-top: 1px solid #4a5a6a; padding: 12px; flex-shrink: 0"
         :style="{ display: 'flex', flexDirection: isCollapsed ? 'column' : 'row', alignItems: 'center', gap: isCollapsed ? '6px' : '8px', justifyContent: 'center' }"
       >
@@ -63,6 +65,7 @@
           {{ currentUser.role === 'ADMIN' ? '管理员' : '普通用户' }}
         </el-tag>
         <el-button
+          class="logout-btn"
           size="small"
           text
           style="color: #f56c6c; flex-shrink: 0"
@@ -134,4 +137,12 @@ const handleLogout = () => {
 
 <style>
 body { margin: 0; }
+
+/* Bottom logout button: hidden by default, shown on hover */
+.sidebar-user-area .logout-btn {
+  display: none;
+}
+.sidebar-user-area:hover .logout-btn {
+  display: inline-flex;
+}
 </style>

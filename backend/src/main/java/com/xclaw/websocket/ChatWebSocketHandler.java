@@ -193,10 +193,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             try {
                 int port = instance.getPort();
                 String wsUrl = "ws://" + xclawHost + ":" + port;
-                // If instance has a gateway token (remoteAccess=true), pass it as query param
-                if (instance.getGatewayToken() != null && !instance.getGatewayToken().isEmpty()) {
-                    wsUrl += "?token=" + instance.getGatewayToken();
-                }
+                String gatewayToken = instance.getGatewayToken();
                 log.info("Connecting to OpenClaw gateway at {} sessionKey={}", wsUrl, ocSessionKey);
 
                 KeyPairGenerator keyGen = KeyPairGenerator.getInstance("Ed25519");
@@ -211,7 +208,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 httpClient.newWebSocketBuilder()
                     .buildAsync(URI.create(wsUrl),
                         makeOcListener(session, keyPair, deviceId, pubKeyB64url,
-                            userMessage, ocSessionKey, instanceId))
+                            userMessage, ocSessionKey, instanceId, gatewayToken))
                     .get(10, TimeUnit.SECONDS);
 
             } catch (Exception e) {
@@ -223,7 +220,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
     private WebSocket.Listener makeOcListener(WebSocketSession session, KeyPair keyPair,
             String deviceId, String pubKeyB64url, String userMessage,
-            String ocSessionKey, Long instanceId) {
+            String ocSessionKey, Long instanceId, String gatewayToken) {
         return new WebSocket.Listener() {
             private final StringBuilder fullResponse = new StringBuilder();
             private final StringBuilder buf = new StringBuilder();
@@ -274,7 +271,10 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                         params.put("role", "operator");
                         params.putArray("scopes").add("operator.admin");
                         params.putArray("caps");
-                        params.putObject("auth");
+                        ObjectNode auth = params.putObject("auth");
+                        if (gatewayToken != null && !gatewayToken.isEmpty()) {
+                            auth.put("token", gatewayToken);
+                        }
                         ObjectNode dev = params.putObject("device");
                         dev.put("id", deviceId);
                         dev.put("publicKey", pubKeyB64url);

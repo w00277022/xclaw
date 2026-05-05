@@ -192,7 +192,12 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         CompletableFuture.runAsync(() -> {
             try {
                 int port = instance.getPort();
-                log.info("Connecting to OpenClaw gateway at ws://{}:{} sessionKey={}", xclawHost, port, ocSessionKey);
+                String wsUrl = "ws://" + xclawHost + ":" + port;
+                // If instance has a gateway token (remoteAccess=true), pass it as query param
+                if (instance.getGatewayToken() != null && !instance.getGatewayToken().isEmpty()) {
+                    wsUrl += "?token=" + instance.getGatewayToken();
+                }
+                log.info("Connecting to OpenClaw gateway at {} sessionKey={}", wsUrl, ocSessionKey);
 
                 KeyPairGenerator keyGen = KeyPairGenerator.getInstance("Ed25519");
                 KeyPair keyPair = keyGen.generateKeyPair();
@@ -204,7 +209,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
                 HttpClient httpClient = HttpClient.newHttpClient();
                 httpClient.newWebSocketBuilder()
-                    .buildAsync(URI.create("ws://" + xclawHost + ":" + port),
+                    .buildAsync(URI.create(wsUrl),
                         makeOcListener(session, keyPair, deviceId, pubKeyB64url,
                             userMessage, ocSessionKey, instanceId))
                     .get(10, TimeUnit.SECONDS);

@@ -148,10 +148,11 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
 
             // Generate config JSON
             String gatewayAuthBlock = remoteAccess ? ", \"auth\": {\"token\": \"%s\"}".formatted(gatewayToken) : "";
+            String controlUiBlock = remoteAccess ? ", \"controlUi\": {\"allowedOrigins\": [\"*\"], \"dangerouslyAllowHostHeaderOriginFallback\": true}" : "";
             String configJson = """
             {
               "meta": {"lastTouchedVersion": "2026.4.15", "lastTouchedAt": "2026-05-04T00:00:00.000Z"},
-              "gateway": {"port": %d, "bind": "%s", "mode": "local"%s},
+              "gateway": {"port": %d, "bind": "%s", "mode": "local"%s%s},
               "models": {
                 "providers": {
                   "custom": {
@@ -177,7 +178,7 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
               "wizard": {"lastRunAt": "2026-02-01T11:00:00.000Z", "lastRunVersion": "2026.1.30", "lastRunCommand": "onboard", "lastRunMode": "local"}
             }
             """.formatted(
-                instance.getPort(), bindAddr, gatewayAuthBlock,
+                instance.getPort(), bindAddr, controlUiBlock, gatewayAuthBlock,
                 llmUrl, llmKey,
                 llmModel, llmModel,
                 instanceDir.resolve("workspace").toString(),

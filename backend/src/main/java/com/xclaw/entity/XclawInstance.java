@@ -23,6 +23,9 @@ public class XclawInstance {
     @TableField(exist = false)
     private String url;
 
+    /** Gateway token for remote access authentication (persisted). Set only when remoteAccess=true. */
+    private String gatewayToken;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

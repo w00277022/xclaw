@@ -163,7 +163,12 @@ onMounted(() => window.addEventListener('storage', onStorage))
 const iframeUrl = computed(() => {
   if (!selected.value) return ''
   // Use the url field from backend (auto-generated from xclaw.host config)
-  return selected.value.url || ''
+  let url = selected.value.url || ''
+  // If instance requires remote access token, append it for auth
+  if (url && selected.value.gatewayToken) {
+    url += '?token=' + selected.value.gatewayToken
+  }
+  return url
 })
 
 const statusType = (s) => ({ RUNNING: 'success', STOPPED: 'info', ERROR: 'danger' }[s] || 'info')

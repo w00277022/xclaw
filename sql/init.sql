@@ -27,6 +27,7 @@ CREATE TABLE xclaw_instance (
     description VARCHAR(500) DEFAULT NULL COMMENT '描述',
     error_msg VARCHAR(500) DEFAULT NULL COMMENT '错误信息',
     type VARCHAR(20) NOT NULL DEFAULT 'openclaw' COMMENT '类型: openclaw/hermes',
+    gateway_token VARCHAR(255) DEFAULT NULL COMMENT 'Gateway访问Token',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_status (status),

@@ -139,6 +139,10 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
             String gatewayToken = null;
             if (remoteAccess) {
                 gatewayToken = java.util.UUID.randomUUID().toString().replace("-", "");
+                instance.setGatewayToken(gatewayToken);
+            } else {
+                // Clear any previously stored token when remoteAccess is disabled
+                instance.setGatewayToken(null);
             }
             log.info("Starting OpenClaw instance {} with bind={} (remoteAccess={})", instanceId, bindAddr, remoteAccess);
 

@@ -42,6 +42,21 @@ public class XclawInstanceController {
         }
     }
 
+    /** Strip gatewayToken if user is not admin and not the instance owner */
+    private void sanitizeGatewayToken(XclawInstance inst, Long userId, String role) {
+        if (inst.getGatewayToken() != null) {
+            if (!"ADMIN".equals(role) && !inst.getUserId().equals(userId)) {
+                inst.setGatewayToken(null);
+            }
+        }
+    }
+
+    private void sanitizeGatewayTokens(List<XclawInstance> instances, Long userId, String role) {
+        for (XclawInstance inst : instances) {
+            sanitizeGatewayToken(inst, userId, role);
+        }
+    }
+
     @PostMapping
     public ResponseEntity<?> create(@RequestBody CreateXclawRequest req, HttpServletRequest request) {
         Long userId = (Long) request.getAttribute("userId");
@@ -62,13 +77,17 @@ public class XclawInstanceController {
         String role = (String) request.getAttribute("role");
         List<XclawInstance> instances = instanceService.listAll(userId, role);
         populateUrls(instances);
+        sanitizeGatewayTokens(instances, userId, role);
         return ResponseEntity.ok(instances);
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<XclawInstance> get(@PathVariable Long id) {
+    public ResponseEntity<XclawInstance> get(@PathVariable Long id, HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute("userId");
+        String role = (String) request.getAttribute("role");
         XclawInstance inst = instanceService.getById(id);
         populateUrl(inst);
+        sanitizeGatewayToken(inst, userId, role);
         return ResponseEntity.ok(inst);
     }
 

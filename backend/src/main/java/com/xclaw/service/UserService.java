@@ -27,8 +27,14 @@ public class UserService extends ServiceImpl<UserMapper, User> {
         user.setPassword(passwordEncoder.encode(password));
         user.setDisplayName(displayName);
         user.setRole(role != null ? role : "USER");
-        user.setCanCreateOpenclaw(canCreateOpenclaw != null ? canCreateOpenclaw : true);
-        user.setCanCreateHermes(canCreateHermes != null ? canCreateHermes : false);
+        // 管理员自动拥有所有实例创建权限
+        if ("ADMIN".equals(user.getRole())) {
+            user.setCanCreateOpenclaw(true);
+            user.setCanCreateHermes(true);
+        } else {
+            user.setCanCreateOpenclaw(canCreateOpenclaw != null ? canCreateOpenclaw : true);
+            user.setCanCreateHermes(canCreateHermes != null ? canCreateHermes : false);
+        }
         save(user);
         return user;
     }

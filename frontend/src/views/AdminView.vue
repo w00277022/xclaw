@@ -89,11 +89,11 @@
         </el-form-item>
         <el-divider content-position="left">实例创建权限</el-divider>
         <el-form-item label="OpenClaw">
-          <el-checkbox v-model="addForm.canCreateOpenclaw" />
+          <el-checkbox v-model="addForm.canCreateOpenclaw" :disabled="addForm.role === 'ADMIN'" />
           <span style="color: #909399; font-size: 12px; margin-left: 8px">允许创建 OpenClaw 实例</span>
         </el-form-item>
         <el-form-item label="Hermes-Agent">
-          <el-checkbox v-model="addForm.canCreateHermes" />
+          <el-checkbox v-model="addForm.canCreateHermes" :disabled="addForm.role === 'ADMIN'" />
           <span style="color: #909399; font-size: 12px; margin-left: 8px">允许创建 Hermes-Agent 实例</span>
         </el-form-item>
       </el-form>
@@ -106,7 +106,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { userApi } from '../api'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
@@ -200,6 +200,14 @@ const handleAddUser = async () => {
     addLoading.value = false
   }
 }
+
+// 选择管理员角色时自动勾选所有实例权限
+watch(() => addForm.role, (newRole) => {
+  if (newRole === 'ADMIN') {
+    addForm.canCreateOpenclaw = true
+    addForm.canCreateHermes = true
+  }
+})
 
 onMounted(loadUsers)
 </script>

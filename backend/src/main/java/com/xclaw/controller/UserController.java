@@ -88,6 +88,10 @@ public class UserController {
             return ResponseEntity.badRequest().body(Map.of("code", 400, "message", "角色必须为 ADMIN 或 USER"));
         }
         user.setRole(newRole);
+        if ("ADMIN".equals(newRole)) {
+            user.setCanCreateOpenclaw(true);
+            user.setCanCreateHermes(true);
+        }
         userService.updateById(user);
         return ResponseEntity.ok(Map.of("code", 200, "message", "角色已更新"));
     }
@@ -101,6 +105,17 @@ public class UserController {
         User user = userService.getById(id);
         if (user == null) {
             return ResponseEntity.status(404).body(Map.of("code", 404, "message", "用户不存在"));
+        }
+        if (body.containsKey("role")) {
+            String newRole = (String) body.get("role");
+            if (!"ADMIN".equals(newRole) && !"USER".equals(newRole)) {
+                return ResponseEntity.badRequest().body(Map.of("code", 400, "message", "角色必须为 ADMIN 或 USER"));
+            }
+            user.setRole(newRole);
+            if ("ADMIN".equals(newRole)) {
+                user.setCanCreateOpenclaw(true);
+                user.setCanCreateHermes(true);
+            }
         }
         if (body.containsKey("canCreateOpenclaw")) {
             user.setCanCreateOpenclaw((Boolean) body.get("canCreateOpenclaw"));

@@ -97,6 +97,13 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         chatMessageService.saveMessage(instanceId, sessionKey, "user", userMessage);
         log.info("Chat [{}] session={}: {}", instanceId, sessionKey, userMessage.substring(0, Math.min(50, userMessage.length())));
 
+        // Hermes type: use HTTP API
+        if ("hermes".equals(instance.getType())) {
+            String combinedMessage = userMessage + attachmentInfo;
+            handleHermesChat(session, instance, combinedMessage, sessionKey, instanceId);
+            return;
+        }
+
         String combinedMessage = userMessage + attachmentInfo;
         connectAndChat(session, instance, combinedMessage, sessionKey, instanceId);
     }
@@ -117,6 +124,49 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         } catch (IOException e) {
             log.error("Failed to send sessionCreated", e);
         }
+    }
+
+    /**
+     * Handle chat for Hermes-agent instances via HTTP API.
+     * Hermes exposes a REST endpoint for dispatching tasks.
+     */
+    private void handleHermesChat(WebSocketSession session, XclawInstance instance,
+            String userMessage, String sessionKey, Long instanceId) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                int port = instance.getPort();
+                String hermesUrl = "http://localhost:" + port + "/api/dispatch";
+
+                ObjectNode reqBody = objectMapper.createObjectNode();
+                reqBody.put("task", userMessage);
+                reqBody.put("sessionKey", sessionKey);
+
+                HttpClient httpClient = HttpClient.newHttpClient();
+                java.net.http.HttpRequest httpRequest = java.net.http.HttpRequest.newBuilder()
+                    .uri(URI.create(hermesUrl))
+                    .header("Content-Type", "application/json")
+                    .POST(java.net.http.HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(reqBody)))
+                    .build();
+
+                // Send initial streaming indicator
+                sendChunk(session, "", false);
+
+                java.net.http.HttpResponse<String> response = httpClient.send(httpRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
+
+                if (response.statusCode() == 200) {
+                    JsonNode result = objectMapper.readTree(response.body());
+                    String content = result.path("result").asText(result.path("output").asText(response.body()));
+                    sendChunk(session, content, false);
+                    sendChunk(session, "", true);
+                    chatMessageService.saveMessage(instanceId, sessionKey, "assistant", content);
+                } else {
+                    sendError(session, "Hermes返回错误: HTTP " + response.statusCode());
+                }
+            } catch (Exception e) {
+                log.error("Failed to chat with Hermes instance {}", instanceId, e);
+                sendError(session, "Hermes连接失败: " + e.getMessage());
+            }
+        });
     }
 
     private void connectAndChat(WebSocketSession session, XclawInstance instance,

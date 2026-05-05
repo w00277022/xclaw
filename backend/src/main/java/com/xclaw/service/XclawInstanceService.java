@@ -11,8 +11,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -52,6 +54,8 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
      */
     public XclawInstance createInstance(CreateXclawRequest req, Long userId, String role, String requesterName) {
         int port = findAvailablePort();
+        String type = req.getType();
+        if (type == null || type.isEmpty()) type = "openclaw";
 
         XclawInstance instance = new XclawInstance();
         instance.setName(req.getName());
@@ -59,12 +63,17 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
         instance.setConfigJson(req.getConfigJson());
         instance.setUserId(userId);
         instance.setPort(port);
+        instance.setType(type);
 
         // Admin or no-auth (legacy): create directly
         if (role == null || "ADMIN".equals(role)) {
             instance.setStatus("CREATING");
             save(instance);
-            new Thread(() -> startOpenClawGateway(instance)).start();
+            if ("hermes".equals(type)) {
+                new Thread(() -> startHermesContainer(instance)).start();
+            } else {
+                new Thread(() -> startOpenClawGateway(instance)).start();
+            }
         } else {
             // Regular user: pending approval
             instance.setStatus("PENDING_APPROVAL");
@@ -90,7 +99,11 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
         instance.setStatus("CREATING");
         instance.setErrorMsg(null);
         updateById(instance);
-        new Thread(() -> startOpenClawGateway(instance)).start();
+        if ("hermes".equals(instance.getType())) {
+            new Thread(() -> startHermesContainer(instance)).start();
+        } else {
+            new Thread(() -> startOpenClawGateway(instance)).start();
+        }
     }
 
     private void startOpenClawGateway(XclawInstance instance) {
@@ -187,24 +200,37 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
     public void startInstance(Long id) {
         XclawInstance instance = getById(id);
         if (instance == null) throw new RuntimeException("Instance not found");
-        if (!runningProcesses.containsKey(id) || !runningProcesses.get(id).isAlive()) {
-            startOpenClawGateway(instance);
+        if ("hermes".equals(instance.getType())) {
+            startHermesContainer(instance);
+        } else {
+            if (!runningProcesses.containsKey(id) || !runningProcesses.get(id).isAlive()) {
+                startOpenClawGateway(instance);
+            }
         }
     }
 
     public void stopInstance(Long id) {
         XclawInstance instance = getById(id);
         if (instance == null) throw new RuntimeException("Instance not found");
-        Process p = runningProcesses.remove(id);
-        if (p != null && p.isAlive()) {
-            p.destroyForcibly();
+        if ("hermes".equals(instance.getType())) {
+            stopHermesContainer(instance);
+        } else {
+            Process p = runningProcesses.remove(id);
+            if (p != null && p.isAlive()) {
+                p.destroyForcibly();
+            }
         }
         instance.setStatus("STOPPED");
         updateById(instance);
     }
 
     public void deleteInstance(Long id) {
+        XclawInstance inst = getById(id);
+        if (inst == null) throw new RuntimeException("Instance not found");
         stopInstance(id);
+        if ("hermes".equals(inst.getType())) {
+            removeHermesContainer(id);
+        }
         removeById(id);
         // Clean up instance directory
         try {
@@ -220,11 +246,15 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
     public void syncStatus(Long id) {
         XclawInstance instance = getById(id);
         if (instance == null) return;
-        Process p = runningProcesses.get(id);
-        if (p != null && p.isAlive()) {
-            instance.setStatus("RUNNING");
-        } else if ("RUNNING".equals(instance.getStatus())) {
-            instance.setStatus("STOPPED");
+        if ("hermes".equals(instance.getType())) {
+            syncHermesStatus(instance);
+        } else {
+            Process p = runningProcesses.get(id);
+            if (p != null && p.isAlive()) {
+                instance.setStatus("RUNNING");
+            } else if ("RUNNING".equals(instance.getStatus())) {
+                instance.setStatus("STOPPED");
+            }
         }
         updateById(instance);
     }
@@ -248,5 +278,128 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
             }
         }
         return Math.max(9200, port);
+    }
+
+    // ======================== Hermes Docker Container Management ========================
+
+    @Value("${hermes.docker.image:hermes-agent:latest}")
+    private String hermesDockerImage;
+
+    private void startHermesContainer(XclawInstance instance) {
+        try {
+            String instanceId = String.valueOf(instance.getId());
+            String containerName = "xclaw-hermes-" + instanceId;
+
+            // Check if docker is available
+            ProcessBuilder checkPb = new ProcessBuilder("docker", "info");
+            checkPb.redirectError(new File("/dev/null"));
+            checkPb.redirectOutput(new File("/dev/null"));
+            Process checkProc = checkPb.start();
+            if (checkProc.waitFor() != 0) {
+                throw new RuntimeException("Docker daemon 不可用");
+            }
+
+            // Remove existing container if any
+            ProcessBuilder rmPb = new ProcessBuilder("docker", "rm", "-f", containerName);
+            rmPb.redirectError(new File("/dev/null"));
+            rmPb.redirectOutput(new File("/dev/null"));
+            rmPb.start().waitFor();
+
+            // Create instance directory for workspace persistence
+            Path instanceDir = Path.of(instanceBaseDir, instanceId);
+            Files.createDirectories(instanceDir.resolve("workspace"));
+
+            // Run Hermes container
+            ProcessBuilder pb = new ProcessBuilder(
+                "docker", "run", "-d",
+                "--name", containerName,
+                "-p", instance.getPort() + ":" + instance.getPort(),
+                "-v", instanceDir.resolve("workspace").toString() + ":/home/hermes/workspace",
+                "-e", "HERMES_PORT=" + instance.getPort(),
+                "-e", "LLM_BASE_URL=" + llmUrl,
+                "-e", "LLM_API_KEY=" + llmKey,
+                "-e", "LLM_MODEL=" + llmModel,
+                "--restart", "unless-stopped",
+                hermesDockerImage
+            );
+            pb.redirectError(new File("/tmp/xclaw-hermes-" + instance.getId() + ".log"));
+            pb.redirectOutput(new File("/tmp/xclaw-hermes-" + instance.getId() + ".log"));
+
+            Process process = pb.start();
+            int exitCode = process.waitFor();
+            if (exitCode != 0) {
+                throw new RuntimeException("docker run failed with exit code " + exitCode);
+            }
+
+            // Get container ID
+            ProcessBuilder inspectPb = new ProcessBuilder("docker", "inspect", "--format", "{{.Id}}", containerName);
+            inspectPb.redirectError(new File("/dev/null"));
+            Process inspectProc = inspectPb.start();
+            BufferedReader reader = new BufferedReader(new InputStreamReader(inspectProc.getInputStream()));
+            String containerId = reader.readLine();
+            inspectProc.waitFor();
+
+            Thread.sleep(2000); // Wait for container to start
+
+            instance.setStatus("RUNNING");
+            instance.setContainerId(containerId != null ? containerId.trim() : containerName);
+            instance.setErrorMsg(null);
+            updateById(instance);
+
+            log.info("Hermes instance {} started as Docker container {} on port {}", instance.getId(), containerName, instance.getPort());
+
+        } catch (Exception e) {
+            log.error("Failed to start Hermes container for instance {}", instance.getId(), e);
+            instance.setStatus("ERROR");
+            instance.setErrorMsg("Hermes启动失败: " + e.getMessage());
+            updateById(instance);
+        }
+    }
+
+    private void stopHermesContainer(XclawInstance instance) {
+        try {
+            String containerName = "xclaw-hermes-" + instance.getId();
+            ProcessBuilder pb = new ProcessBuilder("docker", "stop", containerName);
+            pb.redirectError(new File("/dev/null"));
+            pb.redirectOutput(new File("/dev/null"));
+            pb.start().waitFor();
+            log.info("Hermes container {} stopped", containerName);
+        } catch (Exception e) {
+            log.warn("Failed to stop Hermes container for instance {}", instance.getId(), e);
+        }
+    }
+
+    private void removeHermesContainer(Long id) {
+        try {
+            String containerName = "xclaw-hermes-" + id;
+            ProcessBuilder pb = new ProcessBuilder("docker", "rm", "-f", containerName);
+            pb.redirectError(new File("/dev/null"));
+            pb.redirectOutput(new File("/dev/null"));
+            pb.start().waitFor();
+            log.info("Hermes container {} removed", containerName);
+        } catch (Exception e) {
+            log.warn("Failed to remove Hermes container for instance {}", id, e);
+        }
+    }
+
+    private void syncHermesStatus(XclawInstance instance) {
+        try {
+            String containerName = "xclaw-hermes-" + instance.getId();
+            ProcessBuilder pb = new ProcessBuilder("docker", "inspect", "--format", "{{.State.Running}}", containerName);
+            pb.redirectError(new File("/dev/null"));
+            Process proc = pb.start();
+            BufferedReader reader = new BufferedReader(new InputStreamReader(proc.getInputStream()));
+            String running = reader.readLine();
+            proc.waitFor();
+            if ("true".equals(running != null ? running.trim() : "")) {
+                instance.setStatus("RUNNING");
+            } else {
+                if ("RUNNING".equals(instance.getStatus())) {
+                    instance.setStatus("STOPPED");
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to sync Hermes status for instance {}", instance.getId(), e);
+        }
     }
 }

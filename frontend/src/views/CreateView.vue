@@ -20,6 +20,16 @@
     </el-alert>
 
     <el-form :model="form" label-width="100px" style="margin-top: 30px">
+      <el-form-item label="实例类型">
+        <el-radio-group v-model="form.type">
+          <el-radio-button value="openclaw">
+            <span style="display: inline-flex; align-items: center; gap: 4px">🦞 OpenClaw</span>
+          </el-radio-button>
+          <el-radio-button value="hermes">
+            <span style="display: inline-flex; align-items: center; gap: 4px">🤖 Hermes-Agent</span>
+          </el-radio-button>
+        </el-radio-group>
+      </el-form-item>
       <el-form-item label="实例名称">
         <el-input v-model="form.name" placeholder="输入实例名称" />
       </el-form-item>
@@ -44,7 +54,7 @@ import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const loading = ref(false)
-const form = ref({ name: '', description: '', configJson: '' })
+const form = ref({ name: '', description: '', configJson: '', type: 'openclaw' })
 
 const handleCreate = async () => {
   if (!form.value.name) { ElMessage.warning('请输入实例名称'); return }

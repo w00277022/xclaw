@@ -6,6 +6,13 @@
         <el-table :data="instances" stripe border style="width: 100%" v-loading="loading">
           <el-table-column prop="id" label="ID" width="80" />
           <el-table-column prop="name" label="名称" width="150" />
+          <el-table-column prop="type" label="类型" width="140">
+            <template #default="{ row }">
+              <el-tag :type="row.type === 'hermes' ? 'warning' : 'primary'" effect="dark" round>
+                {{ row.type === 'hermes' ? '🤖 Hermes' : '🦞 OpenClaw' }}
+              </el-tag>
+            </template>
+          </el-table-column>
           <el-table-column prop="status" label="状态" width="150">
             <template #default="{ row }">
               <el-tag :type="statusType(row.status)">{{ statusLabel(row.status) }}</el-tag>

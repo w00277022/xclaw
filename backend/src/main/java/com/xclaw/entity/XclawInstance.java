@@ -15,6 +15,7 @@ public class XclawInstance {
     private String status; // CREATING, RUNNING, STOPPED, ERROR, PENDING_APPROVAL, REJECTED
     private Integer port;
     private String configJson;
+    private String type; // openclaw, hermes
     private String description;
     private String errorMsg;
     private LocalDateTime createdAt;

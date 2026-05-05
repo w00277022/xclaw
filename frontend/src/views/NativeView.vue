@@ -43,7 +43,10 @@
           }"
         >
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
-            <div style="font-weight: 500; font-size: 14px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" :title="inst.name">{{ inst.name }}</div>
+            <div style="font-weight: 500; font-size: 14px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" :title="inst.name">
+              <span v-if="inst.type === 'hermes'">🤖 </span><span v-else>🦞 </span>{{ inst.name }}
+            </div>
+            <el-tag size="small" :type="inst.type === 'hermes' ? 'warning' : 'primary'" effect="plain" style="font-size: 11px">{{ inst.type === 'hermes' ? 'Hermes' : 'OC' }}</el-tag>
             <el-tag size="small" :type="statusType(inst.status)">{{ inst.status === 'RUNNING' ? '运行中' : inst.status === 'STOPPED' ? '已停止' : inst.status }}</el-tag>
           </div>
           <div style="font-size: 12px; color: #999; margin-top: 6px">

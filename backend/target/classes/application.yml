@@ -24,10 +24,14 @@ mybatis-plus:
     db-config:
       id-type: auto
 
+jwt:
+  secret: xclaw-platform-jwt-secret-key-2026-must-be-at-least-256-bits-long
+  expiration: 86400000
+
 openclaw:
   backend:
     url: https://api.deepseek.com
     api-key: ${OPENCLAW_LLM_API_KEY:sk-2327f09ead3e4606b4b55987829bd9aa}
-    model: deepseek-v4-pro
+    model: deepseek-v4-flash
   runtime: /usr/lib/node_modules/openclaw/dist/index.js
   instance-dir: /root/.openclaw-instances

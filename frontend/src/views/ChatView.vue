@@ -32,7 +32,10 @@
           >
             <template v-if="!isCollapsed">
               <div style="font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 4px">
-                <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ inst.name }}</span>
+                <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+                  <span v-if="inst.type === 'hermes'">🤖 </span><span v-else>🦞 </span>{{ inst.name }}
+                </span>
+                <el-tag size="small" :type="inst.type === 'hermes' ? 'warning' : 'primary'" effect="plain" style="font-size: 11px">{{ inst.type === 'hermes' ? 'Hermes' : 'OC' }}</el-tag>
                 <el-tag size="small" :type="statusType(inst.status)">{{ inst.status }}</el-tag>
               </div>
             </template>

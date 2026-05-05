@@ -223,15 +223,59 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
         }
     }
 
-    public void startInstance(Long id) {
-        XclawInstance instance = getById(id);
-        if (instance == null) throw new RuntimeException("Instance not found");
-        if ("hermes".equals(instance.getType())) {
-            startHermesContainer(instance);
-        } else {
-            if (!runningProcesses.containsKey(id) || !runningProcesses.get(id).isAlive()) {
-                startOpenClawGateway(instance);
-            }
+    /**
+     * Kill a tracked OpenClaw process by instance id (in-memory map).
+     */
+    private void killOpenClawProcess(Long id) {
+        Process p = runningProcesses.remove(id);
+        if (p != null && p.isAlive()) {
+            p.destroyForcibly();
+            log.info("Killed lingering OpenClaw process for instance {}", id);
+        }
+    }
+
+    /**
+     * Kill any process listening on the given port.
+     * Uses lsof to find the PID, then kill -9.
+     */
+    private void killByPort(Integer port) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder("sh", "-c",
+                "lsof -ti:" + port + " 2>/dev/null | xargs -r kill -9");
+            pb.start().waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
+            log.info("Killed orphaned process on port {}", port);
+        } catch (Exception e) {
+            log.debug("No process to kill on port {}: {}", port, e.getMessage());
+        }
+    }
+
+    /**
+     * Kill a process by stored PID string (format: "pid:12345").
+     */
+    private void killByPid(String containerId) {
+        try {
+            long pid = Long.parseLong(containerId.substring(4));
+            ProcessHandle.of(pid).ifPresent(ph -> {
+                if (ph.isAlive()) {
+                    ph.destroyForcibly();
+                    log.info("Killed lingering process by PID {}", pid);
+                }
+            });
+        } catch (NumberFormatException e) {
+            log.warn("Invalid pid in containerId: {}", containerId);
+        }
+    }
+
+    /**
+     * Check whether a process with the given PID exists and is alive.
+     */
+    private boolean isPidAlive(String containerId) {
+        if (containerId == null || !containerId.startsWith("pid:")) return false;
+        try {
+            long pid = Long.parseLong(containerId.substring(4));
+            return ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false);
+        } catch (NumberFormatException e) {
+            return false;
         }
     }
 
@@ -241,9 +285,18 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
         if ("hermes".equals(instance.getType())) {
             stopHermesContainer(instance);
         } else {
+            // Try in-memory process first
             Process p = runningProcesses.remove(id);
             if (p != null && p.isAlive()) {
                 p.destroyForcibly();
+            }
+            // Fallback: kill by stored PID (survives backend restart)
+            if (instance.getContainerId() != null && instance.getContainerId().startsWith("pid:")) {
+                killByPid(instance.getContainerId());
+            }
+            // Fallback: kill by port to clean up orphaned processes
+            if (instance.getPort() != null && instance.getPort() > 0) {
+                killByPort(instance.getPort());
             }
         }
         instance.setStatus("STOPPED");

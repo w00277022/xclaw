@@ -3,7 +3,11 @@
     <!-- Sidebar -->
     <el-aside :width="isCollapsed ? '64px' : '220px'" style="background: #304156; display: flex; flex-direction: column; overflow: hidden; transition: width 0.3s ease">
       <!-- Sidebar Top: Logo + Toggle -->
-      <div style="display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid #4a5a6a; gap: 8px; height: 48px; flex-shrink: 0">
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #4a5a6a; gap: 8px; height: 48px; flex-shrink: 0">
+        <span style="color: #fff; font-size: 16px; font-weight: bold; white-space: nowrap; overflow: hidden">
+          <span style="font-size: 20px">🦞</span>
+          <span v-show="!isCollapsed"> XClaw</span>
+        </span>
         <el-icon
           style="color: #bfcbd9; font-size: 20px; cursor: pointer; flex-shrink: 0"
           @click="toggleCollapse"
@@ -11,10 +15,6 @@
           <Fold v-if="!isCollapsed" />
           <Expand v-else />
         </el-icon>
-        <span style="color: #fff; font-size: 16px; font-weight: bold; white-space: nowrap; overflow: hidden">
-          <span style="font-size: 20px">🦞</span>
-          <span v-show="!isCollapsed"> XClaw</span>
-        </span>
       </div>
 
       <!-- Navigation Menu -->

@@ -135,7 +135,7 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
             Files.createDirectories(instanceDir);
 
             // Determine bind address
-            String bindAddr = remoteAccess ? "0.0.0.0" : "loopback";
+            String bindAddr = remoteAccess ? "lan" : "loopback";
             log.info("Starting OpenClaw instance {} with bind={} (remoteAccess={})", instanceId, bindAddr, remoteAccess);
 
             // Generate config JSON

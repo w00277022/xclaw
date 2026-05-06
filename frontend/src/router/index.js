@@ -10,6 +10,7 @@ const routes = [
   { path: '/chat', component: () => import('../views/ChatView.vue'), meta: { requiresAuth: true } },
   { path: '/native', component: () => import('../views/NativeView.vue'), meta: { requiresAuth: true } },
   { path: '/admin', component: () => import('../views/AdminView.vue'), meta: { requiresAuth: true, requiresAdmin: true } },
+  { path: '/nodes', component: () => import('../views/NodeView.vue'), meta: { requiresAuth: true, requiresAdmin: true } },
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })

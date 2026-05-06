@@ -47,6 +47,10 @@
           <el-icon><User /></el-icon>
           <span>管理员配置</span>
         </el-menu-item>
+        <el-menu-item v-if="adminCheck" index="/nodes">
+          <el-icon><Connection /></el-icon>
+          <span>节点管理</span>
+        </el-menu-item>
       </el-menu>
 
       <!-- Sidebar Bottom: User Info + Logout (hover to reveal) -->

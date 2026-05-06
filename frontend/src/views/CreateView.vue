@@ -47,6 +47,12 @@
           您当前没有创建任何类型实例的权限，请联系管理员
         </div>
       </el-form-item>
+      <el-form-item label="部署节点">
+        <el-select v-model="form.nodeId" placeholder="选择部署节点" clearable style="width: 100%">
+          <el-option v-for="n in nodes" :key="n.id" :label="n.name + (n.isLocal ? ' (本机)' : ' - ' + n.host)" :value="n.id" />
+        </el-select>
+        <div style="font-size: 12px; color: #909399; margin-top: 4px">留空则部署到本机</div>
+      </el-form-item>
       <el-form-item label="实例名称">
         <el-input v-model="form.name" placeholder="输入实例名称" />
       </el-form-item>
@@ -76,7 +82,8 @@ import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const loading = ref(false)
-const form = reactive({ name: '', description: '', configJson: '', type: 'openclaw' })
+const form = reactive({ name: '', description: '', configJson: '', type: 'openclaw', nodeId: null })
+const nodes = ref([])
 
 const user = computed(() => getCurrentUser())
 const isAdmin = computed(() => user.value?.role === 'ADMIN')
@@ -142,4 +149,7 @@ const handleCreate = async () => {
 }
 
 onMounted(loadAllowedTypes)
+
+// Load nodes
+xclawApi.nodes().then(({ data }) => { nodes.value = data || [] }).catch(() => {})
 </script>

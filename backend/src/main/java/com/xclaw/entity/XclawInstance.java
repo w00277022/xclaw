@@ -16,6 +16,7 @@ public class XclawInstance {
     private Integer port;
     private String configJson;
     private String type; // openclaw, hermes
+    private Long nodeId; // which node this instance is deployed to
     private String description;
     private String errorMsg;
 

@@ -2,9 +2,11 @@ com/xclaw/service/ChatMessageService.class
 com/xclaw/util/JwtUtil.class
 com/xclaw/service/UserService.class
 com/xclaw/entity/User.class
+com/xclaw/controller/XclawNodeController.class
 com/xclaw/service/ApprovalService.class
 com/xclaw/entity/XclawInstance.class
 com/xclaw/controller/ChatController.class
+com/xclaw/entity/XclawNode.class
 com/xclaw/entity/ChatMessage.class
 com/xclaw/mapper/ApprovalMapper.class
 com/xclaw/entity/Approval.class
@@ -19,8 +21,10 @@ com/xclaw/interceptor/AuthInterceptor.class
 com/xclaw/config/DataInitializer.class
 com/xclaw/config/WebSocketConfig.class
 com/xclaw/controller/AuthController.class
+com/xclaw/service/XclawNodeService.class
 com/xclaw/service/XclawInstanceService.class
 com/xclaw/mapper/XclawInstanceMapper.class
+com/xclaw/mapper/XclawNodeMapper.class
 com/xclaw/websocket/ChatWebSocketHandler.class
 com/xclaw/dto/CreateXclawRequest.class
 com/xclaw/mapper/UserMapper.class

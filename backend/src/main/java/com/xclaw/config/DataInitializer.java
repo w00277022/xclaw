@@ -1,6 +1,7 @@
 package com.xclaw.config;
 
 import com.xclaw.service.UserService;
+import com.xclaw.service.XclawNodeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Component;
 public class DataInitializer implements CommandLineRunner {
 
     private final UserService userService;
+    private final XclawNodeService nodeService;
 
     @Override
     public void run(String... args) {
@@ -21,5 +23,6 @@ public class DataInitializer implements CommandLineRunner {
         } else {
             log.info("Admin user already exists");
         }
+        nodeService.ensureLocalNode();
     }
 }

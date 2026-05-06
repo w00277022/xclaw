@@ -52,6 +52,9 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
     @Autowired
     private com.xclaw.service.UserService userService;
 
+    @Autowired
+    private com.xclaw.service.XclawNodeService nodeService;
+
     // Track running processes: instanceId -> Process
     private final Map<Long, Process> runningProcesses = new ConcurrentHashMap<>();
 
@@ -86,6 +89,7 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
         instance.setUserId(userId);
         instance.setPort(port);
         instance.setType(type);
+        instance.setNodeId(req.getNodeId());
 
         // Admin or no-auth (legacy): create directly
         if (role == null || "ADMIN".equals(role)) {
@@ -130,21 +134,26 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
 
     private void startOpenClawGateway(XclawInstance instance) {
         try {
-            String instanceId = String.valueOf(instance.getId());
-            Path instanceDir = Path.of(instanceBaseDir, instanceId);
-            Files.createDirectories(instanceDir);
+            com.xclaw.entity.XclawNode node = resolveNode(instance.getNodeId());
+            boolean isRemote = node != null && (node.getIsLocal() == null || !node.getIsLocal());
 
-            // Determine bind address. OpenClaw requires auth when binding to lan.
+            String instanceId = String.valueOf(instance.getId());
+            String instanceDir = (isRemote ? "/opt/xclaw-instances" : instanceBaseDir) + "/" + instanceId;
+
+            if (!isRemote) {
+                Files.createDirectories(Path.of(instanceDir));
+            }
+
+            // Determine bind address
             String bindAddr = remoteAccess ? "lan" : "loopback";
             String gatewayToken = null;
             if (remoteAccess) {
                 gatewayToken = java.util.UUID.randomUUID().toString().replace("-", "");
                 instance.setGatewayToken(gatewayToken);
             } else {
-                // Clear any previously stored token when remoteAccess is disabled
                 instance.setGatewayToken(null);
             }
-            log.info("Starting OpenClaw instance {} with bind={} (remoteAccess={})", instanceId, bindAddr, remoteAccess);
+            log.info("Starting OpenClaw instance {} with bind={} (remoteAccess={}) on node={}", instanceId, bindAddr, remoteAccess, node != null ? node.getName() : "local");
 
             // Generate config JSON
             String gatewayAuthBlock = remoteAccess ? ", \"auth\": {\"token\": \"%s\"}".formatted(gatewayToken) : "";
@@ -170,7 +179,7 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
               },
               "agents": {
                 "defaults": {
-                  "workspace": "%s",
+                  "workspace": "%s/workspace",
                   "model": {"primary": "custom/%s"},
                   "models": {"custom/%s": {}}
                 }
@@ -181,55 +190,72 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
                 instance.getPort(), bindAddr, controlUiBlock, gatewayAuthBlock,
                 llmUrl, llmKey,
                 llmModel, llmModel,
-                instanceDir.resolve("workspace").toString(),
+                instanceDir,
                 llmModel, llmModel
             );
 
-            Files.writeString(instanceDir.resolve("openclaw.json"), configJson);
-            Files.createDirectories(instanceDir.resolve("workspace"));
-
-            // Start OpenClaw gateway process
-            java.util.ArrayList<String> cmd = new java.util.ArrayList<>(java.util.List.of(
-                "/usr/bin/node", openclawRuntime,
-                "gateway",
-                "--port", String.valueOf(instance.getPort()),
-                "--bind", bindAddr
-            ));
-            if (gatewayToken != null) {
-                cmd.add("--token"); cmd.add(gatewayToken);
+            if (isRemote) {
+                // Remote node: SSH to execute commands
+                String sshCmd = String.format(
+                    "mkdir -p %s/workspace && cat > %s/openclaw.json << 'XCLAW_EOF'\n%s\nXCLAW_EOF\n" +
+                    "nohup /usr/bin/node %s gateway --port %d --bind %s %s > /tmp/xclaw-oc-%s.log 2>&1 & echo $!",
+                    instanceDir, instanceDir, configJson,
+                    openclawRuntime, instance.getPort(), bindAddr,
+                    gatewayToken != null ? "--token " + gatewayToken : "--auth none",
+                    instanceId
+                );
+                String output = nodeService.executeRemoteCommand(node, sshCmd, 30).trim();
+                String pid = output.split("\n")[output.split("\n").length - 1].trim();
+                instance.setStatus("RUNNING");
+                instance.setContainerId("remote-pid:" + pid + "@" + node.getHost());
+                instance.setErrorMsg(null);
+                updateById(instance);
+                log.info("OpenClaw instance {} started on remote node {} ({}:{}) pid={}", instanceId, node.getName(), node.getHost(), instance.getPort(), pid);
             } else {
-                cmd.add("--auth"); cmd.add("none");
-            }
-            ProcessBuilder pb = new ProcessBuilder(cmd);
-            pb.environment().put("OPENCLAW_STATE_DIR", instanceDir.toString());
-            pb.environment().put("OPENCLAW_CONFIG_PATH", instanceDir.resolve("openclaw.json").toString());
-            pb.environment().put("OPENCLAW_SERVICE_KIND", "gateway");
-            pb.environment().put("NODE_OPTIONS", "--require /usr/local/share/xclaw/csp-patch.js");
-            pb.redirectError(new File("/tmp/xclaw-oc-" + instance.getId() + ".log"));
-            pb.redirectOutput(new File("/tmp/xclaw-oc-" + instance.getId() + ".log"));
+                // Local execution
+                Files.writeString(Path.of(instanceDir).resolve("openclaw.json"), configJson);
+                Files.createDirectories(Path.of(instanceDir).resolve("workspace"));
 
-            Process process = pb.start();
-            runningProcesses.put(instance.getId(), process);
-
-            // Wait a bit for startup, then mark running
-            Thread.sleep(3000);
-            instance.setStatus("RUNNING");
-            instance.setContainerId("pid:" + process.pid());
-            instance.setErrorMsg(null);
-            updateById(instance);
-
-            log.info("OpenClaw instance {} started on port {}, pid={}", instance.getId(), instance.getPort(), process.pid());
-
-            // Monitor process exit
-            process.onExit().thenAccept(p -> {
-                runningProcesses.remove(instance.getId());
-                XclawInstance inst = getById(instance.getId());
-                if (inst != null && "RUNNING".equals(inst.getStatus())) {
-                    inst.setStatus("STOPPED");
-                    updateById(inst);
-                    log.info("OpenClaw instance {} stopped", instance.getId());
+                java.util.ArrayList<String> cmd = new java.util.ArrayList<>(java.util.List.of(
+                    "/usr/bin/node", openclawRuntime,
+                    "gateway",
+                    "--port", String.valueOf(instance.getPort()),
+                    "--bind", bindAddr
+                ));
+                if (gatewayToken != null) {
+                    cmd.add("--token"); cmd.add(gatewayToken);
+                } else {
+                    cmd.add("--auth"); cmd.add("none");
                 }
-            });
+                ProcessBuilder pb = new ProcessBuilder(cmd);
+                pb.environment().put("OPENCLAW_STATE_DIR", instanceDir);
+                pb.environment().put("OPENCLAW_CONFIG_PATH", Path.of(instanceDir).resolve("openclaw.json").toString());
+                pb.environment().put("OPENCLAW_SERVICE_KIND", "gateway");
+                pb.environment().put("NODE_OPTIONS", "--require /usr/local/share/xclaw/csp-patch.js");
+                pb.redirectError(new File("/tmp/xclaw-oc-" + instance.getId() + ".log"));
+                pb.redirectOutput(new File("/tmp/xclaw-oc-" + instance.getId() + ".log"));
+
+                Process process = pb.start();
+                runningProcesses.put(instance.getId(), process);
+
+                Thread.sleep(3000);
+                instance.setStatus("RUNNING");
+                instance.setContainerId("pid:" + process.pid());
+                instance.setErrorMsg(null);
+                updateById(instance);
+
+                log.info("OpenClaw instance {} started on port {}, pid={}", instance.getId(), instance.getPort(), process.pid());
+
+                process.onExit().thenAccept(p -> {
+                    runningProcesses.remove(instance.getId());
+                    XclawInstance inst = getById(instance.getId());
+                    if (inst != null && "RUNNING".equals(inst.getStatus())) {
+                        inst.setStatus("STOPPED");
+                        updateById(inst);
+                        log.info("OpenClaw instance {} stopped", instance.getId());
+                    }
+                });
+            }
 
         } catch (Exception e) {
             log.error("Failed to start OpenClaw for instance {}", instance.getId(), e);
@@ -237,6 +263,12 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
             instance.setErrorMsg("启动失败: " + e.getMessage());
             updateById(instance);
         }
+    }
+
+    /** Resolve node by ID; returns null for local-only (nodeId=null). */
+    private com.xclaw.entity.XclawNode resolveNode(Long nodeId) {
+        if (nodeId == null) return null;
+        return nodeService.getById(nodeId);
     }
 
     /**
@@ -301,16 +333,21 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
         if ("hermes".equals(instance.getType())) {
             startHermesContainer(instance);
         } else {
-            // Always kill any lingering process and restart with fresh config.
-            // This ensures remoteAccess / bind changes take effect on restart.
-            killOpenClawProcess(id);
-            if (instance.getContainerId() != null && instance.getContainerId().startsWith("pid:")) {
-                killByPid(instance.getContainerId());
+            com.xclaw.entity.XclawNode node = resolveNode(instance.getNodeId());
+            boolean isRemote = node != null && (node.getIsLocal() == null || !node.getIsLocal());
+            if (isRemote) {
+                // For remote, just re-run startOpenClawGateway which handles SSH
+                startOpenClawGateway(instance);
+            } else {
+                killOpenClawProcess(id);
+                if (instance.getContainerId() != null && instance.getContainerId().startsWith("pid:")) {
+                    killByPid(instance.getContainerId());
+                }
+                if (instance.getPort() != null && instance.getPort() > 0) {
+                    killByPort(instance.getPort());
+                }
+                startOpenClawGateway(instance);
             }
-            if (instance.getPort() != null && instance.getPort() > 0) {
-                killByPort(instance.getPort());
-            }
-            startOpenClawGateway(instance);
         }
     }
 
@@ -320,18 +357,28 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
         if ("hermes".equals(instance.getType())) {
             stopHermesContainer(instance);
         } else {
-            // Try in-memory process first
-            Process p = runningProcesses.remove(id);
-            if (p != null && p.isAlive()) {
-                p.destroyForcibly();
-            }
-            // Fallback: kill by stored PID (survives backend restart)
-            if (instance.getContainerId() != null && instance.getContainerId().startsWith("pid:")) {
-                killByPid(instance.getContainerId());
-            }
-            // Fallback: kill by port to clean up orphaned processes
-            if (instance.getPort() != null && instance.getPort() > 0) {
-                killByPort(instance.getPort());
+            com.xclaw.entity.XclawNode node = resolveNode(instance.getNodeId());
+            boolean isRemote = node != null && (node.getIsLocal() == null || !node.getIsLocal());
+            if (isRemote) {
+                // Stop via SSH
+                String containerId = instance.getContainerId();
+                if (containerId != null && containerId.startsWith("remote-pid:")) {
+                    String pid = containerId.split("@")[0].substring("remote-pid:".length());
+                    try {
+                        nodeService.executeRemoteCommand(node, "kill " + pid + " 2>/dev/null || true", 10);
+                    } catch (Exception e) {
+                        log.warn("Failed to stop remote instance {}: {}", id, e.getMessage());
+                    }
+                }
+            } else {
+                Process p = runningProcesses.remove(id);
+                if (p != null && p.isAlive()) p.destroyForcibly();
+                if (instance.getContainerId() != null && instance.getContainerId().startsWith("pid:")) {
+                    killByPid(instance.getContainerId());
+                }
+                if (instance.getPort() != null && instance.getPort() > 0) {
+                    killByPort(instance.getPort());
+                }
             }
         }
         instance.setStatus("STOPPED");
@@ -363,19 +410,34 @@ public class XclawInstanceService extends ServiceImpl<XclawInstanceMapper, Xclaw
         if ("hermes".equals(instance.getType())) {
             syncHermesStatus(instance);
         } else {
-            Process p = runningProcesses.get(id);
-            if (p != null && p.isAlive()) {
-                // Process tracked in-memory and alive
-                instance.setStatus("RUNNING");
-            } else if ("RUNNING".equals(instance.getStatus())) {
-                // Process not in memory map (e.g. after backend restart).
-                // Fall back to checking the stored PID in containerId.
-                if (isPidAlive(instance.getContainerId())) {
-                    // Process is still alive — keep RUNNING
-                    log.info("Instance {} process still alive (checked by stored PID), keeping RUNNING", id);
-                } else {
-                    instance.setStatus("STOPPED");
-                    log.info("Instance {} process not alive (PID check failed), marking STOPPED", id);
+            com.xclaw.entity.XclawNode node = resolveNode(instance.getNodeId());
+            boolean isRemote = node != null && (node.getIsLocal() == null || !node.getIsLocal());
+            if (isRemote) {
+                // Check remote process via SSH
+                String containerId = instance.getContainerId();
+                if (containerId != null && containerId.startsWith("remote-pid:")) {
+                    String pid = containerId.split("@")[0].substring("remote-pid:".length());
+                    try {
+                        String result = nodeService.executeRemoteCommand(node, "kill -0 " + pid + " 2>/dev/null && echo ALIVE || echo DEAD", 5);
+                        if (result.trim().contains("ALIVE")) {
+                            instance.setStatus("RUNNING");
+                        } else if ("RUNNING".equals(instance.getStatus())) {
+                            instance.setStatus("STOPPED");
+                        }
+                    } catch (Exception e) {
+                        if ("RUNNING".equals(instance.getStatus())) instance.setStatus("OFFLINE");
+                    }
+                }
+            } else {
+                Process p = runningProcesses.get(id);
+                if (p != null && p.isAlive()) {
+                    instance.setStatus("RUNNING");
+                } else if ("RUNNING".equals(instance.getStatus())) {
+                    if (isPidAlive(instance.getContainerId())) {
+                        log.info("Instance {} process still alive (checked by stored PID), keeping RUNNING", id);
+                    } else {
+                        instance.setStatus("STOPPED");
+                    }
                 }
             }
         }

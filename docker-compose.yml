@@ -4,29 +4,45 @@ services:
   mysql:
     image: mysql:8
     environment:
-      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
       MYSQL_DATABASE: xclaw_platform
     ports:
       - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-      - ../sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   backend:
     build: ./backend
     ports:
-      - "8080:8080"
+      - "8081:8081"
     environment:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/xclaw_platform?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
       SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      SPRING_DATASOURCE_DRIVER: com.mysql.cj.jdbc.Driver
+      H2_CONSOLE_ENABLED: "false"
+      SERVER_PORT: "8081"
+      XCLAW_HOST: ${XCLAW_HOST:-localhost}
+      XCLAW_REMOTE_ACCESS: ${XCLAW_REMOTE_ACCESS:-false}
+      OPENCLAW_LLM_API_KEY: ${OPENCLAW_LLM_API_KEY:-}
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - instance_data:/root/.openclaw-instances
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: ""
     ports:
       - "80:80"
     depends_on:
@@ -34,3 +50,4 @@ services:
 
 volumes:
   mysql_data:
+  instance_data:

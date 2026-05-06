@@ -3,8 +3,10 @@ package com.xclaw.controller;
 import com.xclaw.dto.CreateXclawRequest;
 import com.xclaw.entity.User;
 import com.xclaw.entity.XclawInstance;
-import com.xclaw.service.UserService;
+import com.xclaw.service.XclawNodeService;
 import com.xclaw.service.XclawInstanceService;
+import com.xclaw.service.UserService;
+import com.xclaw.entity.XclawNode;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +26,7 @@ public class XclawInstanceController {
 
     private final XclawInstanceService instanceService;
     private final UserService userService;
+    private final XclawNodeService nodeService;
 
     @Value("${xclaw.host:localhost}")
     private String xclawHost;
@@ -158,5 +161,10 @@ public class XclawInstanceController {
         types.add(openclaw);
         types.add(hermes);
         return ResponseEntity.ok(types);
+    }
+
+    @GetMapping("/nodes")
+    public ResponseEntity<List<XclawNode>> listNodes() {
+        return ResponseEntity.ok(nodeService.list());
     }
 }

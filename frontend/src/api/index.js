@@ -1,7 +1,7 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 
-const api = axios.create({ baseURL: '/api' })
+const api = axios.create({ baseURL: import.meta.env.VITE_API_BASE_URL || '/api' })
 
 // JWT token injection
 api.interceptors.request.use((config) => {
@@ -45,6 +45,16 @@ export const xclawApi = {
   delete: (id) => api.delete(`/xclaw/${id}`),
   sync: (id) => api.post(`/xclaw/${id}/sync`),
   allowedTypes: () => api.get('/xclaw/allowed-types'),
+  nodes: () => api.get('/xclaw/nodes'),
+}
+
+// Node API
+export const nodeApi = {
+  list: () => api.get('/nodes'),
+  create: (data) => api.post('/nodes', data),
+  update: (id, data) => api.put(`/nodes/${id}`, data),
+  delete: (id) => api.delete(`/nodes/${id}`),
+  test: (id) => api.post(`/nodes/${id}/test`),
 }
 
 // Chat API

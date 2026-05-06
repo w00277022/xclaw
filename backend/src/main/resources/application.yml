@@ -29,8 +29,8 @@ jwt:
   expiration: ${JWT_EXPIRATION:86400000}
 
 xclaw:
-  host: ${XCLAW_HOST:localhost}
-  remote-access: ${XCLAW_REMOTE_ACCESS:false}
+  host: ${XCLAW_HOST:172.16.10.224}
+  remote-access: ${XCLAW_REMOTE_ACCESS:true}
 
 openclaw:
   backend:

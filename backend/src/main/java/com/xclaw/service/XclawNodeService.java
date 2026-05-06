@@ -102,9 +102,10 @@ public class XclawNodeService extends ServiceImpl<XclawNodeMapper, XclawNode> {
         }
         String user = node.getSshUser() != null ? node.getSshUser() : "root";
         Session session = jsch.getSession(user, node.getHost(), node.getPort() != null ? node.getPort() : 22);
-        if (node.getSshKey() == null || node.getSshKey().isEmpty()) {
-            // If no key, try password auth (should be configured via host key checking)
-            session.setConfig("StrictHostKeyChecking", "no");
+        // Password authentication (used when no SSH key is provided)
+        String password = node.getSshPassword();
+        if (password != null && !password.isEmpty()) {
+            session.setPassword(password);
         }
         session.setConfig("StrictHostKeyChecking", "no");
         session.setTimeout(5000);

@@ -14,6 +14,7 @@ public class XclawNode {
     private Integer port;
     private String sshUser;
     private String sshKey;
+    private String sshPassword;
     private String status; // ONLINE, OFFLINE
     private Boolean isLocal;
     private LocalDateTime createdAt;

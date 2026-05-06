@@ -42,6 +42,7 @@ public class XclawNodeController {
         if (updated.getPort() != null) node.setPort(updated.getPort());
         if (updated.getSshUser() != null) node.setSshUser(updated.getSshUser());
         if (updated.getSshKey() != null) node.setSshKey(updated.getSshKey());
+        if (updated.getSshPassword() != null) node.setSshPassword(updated.getSshPassword());
         if (updated.getStatus() != null) node.setStatus(updated.getStatus());
         nodeService.updateById(node);
         return ResponseEntity.ok(node);

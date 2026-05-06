@@ -85,6 +85,14 @@
             placeholder="粘贴 SSH 私钥内容（可选，留空则保持不变）"
           />
         </el-form-item>
+        <el-form-item label="SSH密码" prop="sshPassword">
+          <el-input
+            v-model="form.sshPassword"
+            type="password"
+            show-password
+            placeholder="SSH 密码（与私钥二选一，留空按已有配置）"
+          />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
@@ -124,7 +132,7 @@ const editingId = ref(null)
 const submitLoading = ref(false)
 const formRef = ref(null)
 
-const defaultForm = () => ({ name: '', host: '', port: 22, sshUser: 'root', sshKey: '' })
+const defaultForm = () => ({ name: '', host: '', port: 22, sshUser: 'root', sshKey: '', sshPassword: '' })
 
 const form = reactive(defaultForm())
 
@@ -150,6 +158,7 @@ const openEditDialog = (row) => {
   form.port = row.port || 22
   form.sshUser = row.sshUser || ''
   form.sshKey = ''
+  form.sshPassword = ''
   dialogVisible.value = true
 }
 
@@ -163,14 +172,16 @@ const handleSubmit = async () => {
       port: form.port,
       sshUser: form.sshUser,
     }
-    // Only send sshKey if provided (backend will keep existing if empty)
+    // Only send sshKey/sshPassword if provided (backend will keep existing if empty)
     if (form.sshKey) payload.sshKey = form.sshKey
+    if (form.sshPassword) payload.sshPassword = form.sshPassword
 
     if (isEditing.value) {
       await nodeApi.update(editingId.value, payload)
       ElMessage.success('节点已更新')
     } else {
       payload.sshKey = form.sshKey // required for create
+      if (form.sshPassword) payload.sshPassword = form.sshPassword
       await nodeApi.create(payload)
       ElMessage.success('节点已创建')
     }

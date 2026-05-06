@@ -10,12 +10,23 @@ public class XclawInstance {
     @TableId(type = IdType.AUTO)
     private Long id;
     private String name;
+    private Long userId;
     private String containerId;
-    private String status; // CREATING, RUNNING, STOPPED, ERROR, DELETING
+    private String status; // CREATING, RUNNING, STOPPED, ERROR, PENDING_APPROVAL, REJECTED
     private Integer port;
     private String configJson;
+    private String type; // openclaw, hermes
+    private Long nodeId; // which node this instance is deployed to
     private String description;
     private String errorMsg;
+
+    /** Instance access URL (computed, not persisted). Example: http://{host}:{port} */
+    @TableField(exist = false)
+    private String url;
+
+    /** Gateway token for remote access authentication (persisted). Set only when remoteAccess=true. */
+    private String gatewayToken;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
